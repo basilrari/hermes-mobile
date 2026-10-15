@@ -1,0 +1,16 @@
+{
+  "name": "hermes-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Android thin client for Hermes Agent (Capacitor), based on NousResearch/hermes-agent PR #49834.",
+  "license": "MIT",
+  "workspaces": ["apps/desktop", "apps/shared", "apps/mobile"],
+  "scripts": {
+    "postinstall": "patch-package",
+    "build:mobile": "npm run build --workspace apps/mobile",
+    "sync:android": "cd apps/mobile && npx cap sync android",
+    "apk:debug": "npm run build:mobile && npm run sync:android && cd apps/mobile/android && ./gradlew assembleDebug"
+  },
+  "devDependencies": { "patch-package": "^8.0.0" },
+  "engines": { "node": ">=22.0.0" }
+}
