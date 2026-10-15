@@ -10,13 +10,18 @@ The app is based on [NousResearch/hermes-agent PR #49834](https://github.com/Nou
 by [@Bentlybro](https://github.com/Bentlybro). See [LICENSE](LICENSE) for MIT terms and attribution.
 
 > Status: milestone 1. Unofficial, Android only, debug builds only.
+>
+> **v0.1.1**: the Desktop renderer is synced to upstream `hermes-agent` main
+> (`7bda2a33`), so **Bot Mode** (the *Bots* tab next to *Sessions*) is included and works
+> against a remote gateway. On tablets the left sidebar stays docked like the desktop app;
+> on phones it opens as an edge overlay from the titlebar toggle.
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
 | `apps/mobile` | The Capacitor app: bridge, connect/login screens, Android project |
-| `apps/desktop` | Upstream Desktop renderer source, reused as-is through the `@/` alias (Electron main is not built) |
+| `apps/desktop` | Upstream Desktop renderer source (hermes-agent main `7bda2a33`), reused as-is through the `@/` alias (Electron main is not built) |
 | `apps/shared` | Upstream shared gateway client (`@hermes/shared`) |
 | `patches/` | `patch-package` fix for `@capacitor-community/safe-area` (IME double padding) |
 | `docs/ARCHITECTURE.md` | How the pieces fit together |
@@ -26,11 +31,11 @@ by [@Bentlybro](https://github.com/Bentlybro). See [LICENSE](LICENSE) for MIT te
 Requirements: Node 22+, JDK 21, and the Android SDK (platform 36 and build-tools; set `ANDROID_HOME`).
 
 ```bash
-npm install --ignore-scripts   # skips Electron/node-pty native builds the mobile app doesn't need
+npm ci --ignore-scripts        # lockfile is upstream's, so the renderer gets the exact dep versions it was tested with; skips Electron/node-pty native builds the mobile app doesn't need
 npx patch-package              # applies patches/ (normally run by postinstall)
 cd apps/mobile
 npm run build                  # vite → apps/mobile/dist
-npx cap sync android
+npx cap sync android           # Capacitor CLI needs Node 22+
 cd android && ./gradlew assembleDebug
 # → apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk

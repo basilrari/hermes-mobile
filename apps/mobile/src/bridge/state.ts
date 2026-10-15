@@ -72,3 +72,25 @@ export function requireReauth(): void {
   $authStatus.set('needs-login')
   $reauthNonce.set($reauthNonce.get() + 1)
 }
+
+/**
+ * Resolve the saved target, waiting for it if the app hasn't committed one yet.
+ * The upstream renderer starts some gateway work at module load (plugin
+ * discovery, profile refresh — Bot Mode's roster rides on it) before MobileRoot
+ * has restored the target from Preferences; failing those calls with "Not
+ * connected" made them burn their retries and give up. Waiting makes them land
+ * as soon as the connect/login flow (or the Preferences restore) completes.
+ */
+export async function awaitTarget(): Promise<GatewayTarget> {
+  if (_target) return _target
+  const loaded = await loadTarget()
+  if (loaded) return loaded
+  return new Promise<GatewayTarget>((resolve) => {
+    const off = $target.listen((t) => {
+      if (t) {
+        off()
+        resolve(t)
+      }
+    })
+  })
+}

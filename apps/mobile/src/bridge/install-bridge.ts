@@ -8,7 +8,13 @@
  * contract.
  */
 
-import { getConnection, getGatewayWsUrl } from './connection'
+import {
+  getConnection,
+  getConnectionFor,
+  getGatewayWsUrl,
+  getGatewayWsUrlFor,
+  getProfileRoutes,
+} from './connection'
 import { api } from './http'
 import { notify, onPowerResume, openExternal, writeClipboard } from './native'
 import { makeStubs } from './stubs'
@@ -25,6 +31,11 @@ export function installBridge(): void {
     api,
     getConnection,
     getGatewayWsUrl,
+    // Registry-route resolution for the upstream renderer (Bot Mode, profile
+    // sockets): one remote source serving every profile.
+    getConnectionFor,
+    getGatewayWsUrlFor,
+    getProfileRoutes,
     // Native integrations.
     notify,
     writeClipboard,

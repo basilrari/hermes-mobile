@@ -9,7 +9,7 @@ import { Clipboard } from '@capacitor/clipboard'
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 
-import type { HermesNotification } from '@/global'
+import type { HermesNotification } from '@/../electron/notification-types'
 
 export async function writeClipboard(text: string): Promise<boolean> {
   try {

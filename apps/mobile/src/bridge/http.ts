@@ -15,7 +15,7 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core'
 
 import { buildApiUrl, pathWithProfileQuery } from './connection-config'
 import { captureSetCookie, cookieHeader } from './cookie-jar'
-import { currentTarget, requireReauth } from './state'
+import { awaitTarget, requireReauth } from './state'
 
 export interface RawResponse {
   status: number
@@ -118,10 +118,7 @@ export async function api<T>(request: {
   timeoutMs?: number
   profile?: string | null
 }): Promise<T> {
-  const target = currentTarget()
-  if (!target) {
-    throw new Error('Not connected to a gateway.')
-  }
+  const target = await awaitTarget()
 
   // Token gateways authenticate REST with the static session-token header (the
   // desktop's fetchJson sends the same). OAuth gateways use the session cookie,

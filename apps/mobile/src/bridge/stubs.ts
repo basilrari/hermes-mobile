@@ -133,7 +133,7 @@ export function makeStubs() {
     onBackendExit: () => noopUnsub,
 
     getVersion: async () => ({
-      appVersion: '0.0.1',
+      appVersion: '0.1.1',
       electronVersion: '',
       nodeVersion: '',
       platform: 'capacitor',
@@ -161,6 +161,64 @@ export function makeStubs() {
       }),
       run: async () => ({ ok: false, error: 'unsupported-on-mobile' }),
     },
+
+    // ── Members the upstream-main renderer contract requires (added when the
+    // renderer was synced to NousResearch/hermes-agent main for Bot Mode).
+    // All desktop-shell-only; inert on a phone/tablet.
+    openSessionInTerminal: async () => unsupportedWindow,
+    openWindow: async () => unsupportedWindow,
+    openBrowserWindow: async () => unsupportedWindow,
+    onBrowserPopoutClosed: () => noopUnsub,
+    // Single window: this window always wins a cross-window ambient cue.
+    claimAmbientCue: async () => true,
+    windowControls: { custom: false, minimize: () => {}, toggleMaximize: () => {}, close: () => {} },
+    petOverlay: {
+      open: async () => ({ ok: false }),
+      close: async () => ({ ok: true }),
+      setBounds: () => {},
+      setIgnoreMouse: () => {},
+      setFocusable: () => {},
+      pushState: () => {},
+      control: () => {},
+      onState: () => noopUnsub,
+      onControl: () => noopUnsub,
+    },
+    quickEntry: {
+      getSettings: async () => ({ enabled: false, registered: false, shortcut: '', supported: false }),
+      setSettings: async () => ({ enabled: false, registered: false, shortcut: '', supported: false }),
+      submit: async () => ({ ok: false }),
+      ackSubmit: () => {},
+      dismiss: () => {},
+      pushState: () => {},
+      onState: () => noopUnsub,
+      onSubmit: () => noopUnsub,
+      onShown: () => noopUnsub,
+      onLateResult: () => noopUnsub,
+    },
+    getSecretStorageEncryption: async () => ({ on: false }),
+    setSecretStorageEncryption: async () => ({ on: false }),
+    sshConfigHosts: async () => ({ hosts: [] }),
+    sshResolveHost: async (host: string) => ({ ok: false, host, error: 'unsupported-on-mobile' }),
+    cloud: {
+      status: async () => ({ loggedIn: false }),
+      login: async () => ({ ok: false, loggedIn: false }),
+      logout: async () => ({ ok: true, loggedIn: false }),
+      discover: async () => ({ ok: false, agents: [], error: 'unsupported-on-mobile' }),
+      agentSignIn: async () => ({ ok: false, error: 'unsupported-on-mobile' }),
+    },
+    readClipboard: async () => '',
+    savePastedText: async () => '',
+    continueBootstrapLocal: async () => ({ ok: false }),
+    updateHold: {
+      recheck: async () => ({ ok: true }),
+      quit: async () => ({ ok: false }),
+      startAnyway: async () => ({ ok: true }),
+    },
+    getSyncStatus: async () => null,
+    findInPage: async () => ({ count: 0 }),
+    stopFindInPage: async () => {},
+    onFoundInPage: () => noopUnsub,
+    onOpenFindBarRequested: () => noopUnsub,
 
     themes: {
       fetchMarketplace: async (id: string) => ({ extensionId: id, displayName: '', themes: [] }),

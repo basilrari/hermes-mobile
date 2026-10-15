@@ -13,19 +13,22 @@ import '~mobile/i18n-overrides'
 
 // 3) Desktop side-effect: persisted translucency (native calls are optional-chained).
 import '@/store/translucency'
+import '@/store/user-bubble-transparency'
+import '@/store/chat-text-scale'
 
 import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { HashRouter } from 'react-router-dom'
+import { HashRouter } from 'react-router'
 
 // Reuse the desktop's own providers so the mobile app shares its exact runtime:
 // query cache, i18n, theme tokens, haptics, routing.
-import { ErrorBoundary } from '@/components/error-boundary'
+import { RootErrorBoundary } from '@/components/error-boundary'
 import { HapticsProvider } from '@/components/haptics-provider'
-import { I18nProvider } from '@/i18n'
+import { ProfileI18nProvider as I18nProvider } from '@/i18n/profile-provider'
 import { installClipboardShim } from '@/lib/clipboard'
 import { queryClient } from '@/lib/query-client'
+import { RootTooltipProvider } from '@/components/ui/tooltip'
 import { ThemeProvider } from '@/themes/context'
 
 import { MobileRoot } from './app'
@@ -34,18 +37,20 @@ installClipboardShim()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary label="root">
+    <RootErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <I18nProvider>
           <ThemeProvider>
             <HapticsProvider>
-              <HashRouter>
-                <MobileRoot />
-              </HashRouter>
+              <RootTooltipProvider>
+                <HashRouter useTransitions={false}>
+                  <MobileRoot />
+                </HashRouter>
+              </RootTooltipProvider>
             </HapticsProvider>
           </ThemeProvider>
         </I18nProvider>
       </QueryClientProvider>
-    </ErrorBoundary>
+    </RootErrorBoundary>
   </StrictMode>,
 )
