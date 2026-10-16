@@ -14,10 +14,21 @@ describe('normalizeRemoteBaseUrl', () => {
   it('strips trailing slash, hash, and query', () => {
     expect(normalizeRemoteBaseUrl('https://gw:9119/?x=1#h')).toBe('https://gw:9119')
   })
-  it('rejects http:// and ws://', () => {
-    const message = 'Gateway URL must use https://. http:// and ws:// are not allowed.'
-    expect(() => normalizeRemoteBaseUrl('http://gw:9119')).toThrow(message)
-    expect(() => normalizeRemoteBaseUrl('ws://gw:9119/api/ws')).toThrow(message)
+  it('rejects http://', () => {
+    expect(() => normalizeRemoteBaseUrl('http://gw:9119')).toThrow(
+      'Gateway URL must use https://. http:// and ws:// are not allowed.',
+    )
+  })
+  it('rejects ws://', () => {
+    expect(() => normalizeRemoteBaseUrl('ws://gw:9119/api/ws')).toThrow(
+      'Gateway URL must use https://. http:// and ws:// are not allowed.',
+    )
+  })
+  it('accepts https://', () => {
+    expect(normalizeRemoteBaseUrl('https://gw:9119')).toBe('https://gw:9119')
+  })
+  it('accepts wss://', () => {
+    expect(normalizeRemoteBaseUrl('wss://gw:9119')).toBe('https://gw:9119')
   })
   it('rejects other non-https schemes', () => {
     expect(() => normalizeRemoteBaseUrl('ftp://gw')).toThrow(/https:\/\//)
