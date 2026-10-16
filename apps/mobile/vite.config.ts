@@ -9,6 +9,7 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 import { hermesMobileRelayOverride } from './src/overrides/relay-override'
+import { exactPathOverride } from './src/overrides/resolve-override'
 
 // Resolve a path relative to this config file.
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
@@ -50,6 +51,17 @@ export default defineConfig({
     // Mobile overrides (HM-11): swap the Desktop bot relay for a no-op. Must run
     // before the default resolver, hence enforce:'pre' inside the plugin.
     hermesMobileRelayOverride(r('./src/overrides/hermes-bots-relay.ts')),
+    // Mobile override (HM-14): every room is a gateway room. Demotes the
+    // renderer's device-local room branch ('legacy') to 'unavailable'.
+    exactPathOverride({
+      name: 'canonical-rooms',
+      target: r('../desktop/src/plugins/hermes-bots/canonical-group-capabilities.ts'),
+      shim: r('./src/overrides/canonical-group-capabilities.ts'),
+      excludeImporter: r('./src/overrides/canonical-group-capabilities.ts'),
+      // The renderer imports this module by relative path AND as `@/plugins/…`;
+      // the alias root is what makes the second form match.
+      alias: { prefix: '@', root: r('../desktop/src') },
+    }),
     react(),
     babel({ presets: [compilerPreset()] }),
     tailwindcss(),

@@ -87,6 +87,7 @@ Every override is registered in `apps/mobile/vite.config.ts` and must have a row
 | Override | Replaces | Why | Removal condition |
 |---|---|---|---|
 | `src/overrides/hermes-bots-relay.ts` (HM-11) | `plugins/hermes-bots/plugin.tsx`'s `./relay` import | The Desktop bot relay publishes each gateway the roster of agents on its **other** connections. Mobile has one connection, so it publishes an **empty** roster and `write_remote_roster` replaces `roster.json` wholesale (upstream #115161) — opening the app could wipe a Desktop's roster. | Upstream stops publishing an empty roster for a sole connection (#115161). |
+| `src/overrides/canonical-group-capabilities.ts` (HM-14) | `plugins/hermes-bots/canonical-group-capabilities` (all importers) | `groupExecutionMode` returns `legacy` for a gateway with no room driver, and `legacy` is the branch that lets the renderer keep rooms **on the device**. Option D requires every room to be a gateway room, so on mobile `legacy` is demoted to `unavailable`. | A stock gateway always reports a canonical driver, or upstream drops the device-local fallback. |
 
 ## Device storage (HM-13)
 
