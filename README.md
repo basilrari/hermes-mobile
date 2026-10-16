@@ -9,6 +9,8 @@ runs on your gateway.
 The app is based on [NousResearch/hermes-agent PR #49834](https://github.com/NousResearch/hermes-agent/pull/49834)
 by [@Bentlybro](https://github.com/Bentlybro). See [LICENSE](LICENSE) for MIT terms and attribution.
 
+Taking over the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).
+
 > Status: M0 in progress. Unofficial, Android-only, HTTPS-only, app ID `io.github.basilrari.hermesmobile`, debug builds only.
 >
 > **v0.1.1**: the Desktop renderer is synced to upstream `hermes-agent` main
@@ -25,6 +27,10 @@ by [@Bentlybro](https://github.com/Bentlybro). See [LICENSE](LICENSE) for MIT te
 | `apps/shared` | Upstream shared gateway client (`@hermes/shared`) |
 | `patches/` | `patch-package` fix for `@capacitor-community/safe-area` (IME double padding) |
 | `docs/ARCHITECTURE.md` | How the pieces fit together |
+| `docs/GATEWAY_SETUP.md` | Gateway setup on pavillion-claw (tailscale serve, password login, bot markers) |
+| `scripts/gateway-doctor/` | Read-only gateway doctor |
+| `docs/HANDOFF.md` | Project handoff: goal, decisions, rules, current state, next steps |
+| `planning/` | Plan, issue drafts and one-page overview |
 
 ## One-time reinstall
 
