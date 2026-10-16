@@ -17,6 +17,7 @@ import {
 } from './connection'
 import { api } from './http'
 import { notify, onPowerResume, openExternal, writeClipboard } from './native'
+import { preparedSubmissions } from './prepared-submissions'
 import { makeStubs } from './stubs'
 
 let installed = false
@@ -41,6 +42,9 @@ export function installBridge(): void {
     writeClipboard,
     openExternal,
     onPowerResume,
+    // Durable send journal (HM-12): pending sends survive an app kill. Electron
+    // contract; the renderer's localStorage fallback is process-crash-unsafe.
+    preparedSubmissions,
   }
 
   // The assembled object intentionally over-satisfies the contract at runtime
