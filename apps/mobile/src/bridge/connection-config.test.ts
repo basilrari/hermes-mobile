@@ -54,6 +54,7 @@ describe('ws url builders', () => {
     expect(buildGatewayWsUrl('http://gw:9119', 'tok en')).toBe('ws://gw:9119/api/ws?token=tok%20en')
   })
   it('derives wss:// from an https:// base', () => {
+    expect(buildGatewayWsUrl('https://gw', 'x')).toBe('wss://gw/api/ws?token=x')
     expect(buildGatewayWsUrl('https://gw:9119', 'x')).toBe('wss://gw:9119/api/ws?token=x')
     expect(buildGatewayWsUrlWithTicket('https://gw:9119', 'abc')).toBe(
       'wss://gw:9119/api/ws?ticket=abc',
