@@ -53,8 +53,11 @@ describe('ws url builders', () => {
   it('token mode embeds an (encoded) ?token=', () => {
     expect(buildGatewayWsUrl('http://gw:9119', 'tok en')).toBe('ws://gw:9119/api/ws?token=tok%20en')
   })
-  it('https base → wss scheme', () => {
-    expect(buildGatewayWsUrl('https://gw', 'x')).toBe('wss://gw/api/ws?token=x')
+  it('derives wss:// from an https:// base', () => {
+    expect(buildGatewayWsUrl('https://gw:9119', 'x')).toBe('wss://gw:9119/api/ws?token=x')
+    expect(buildGatewayWsUrlWithTicket('https://gw:9119', 'abc')).toBe(
+      'wss://gw:9119/api/ws?ticket=abc',
+    )
   })
   it('oauth mode embeds ?ticket=', () => {
     expect(buildGatewayWsUrlWithTicket('http://gw:9119', 'abc')).toBe('ws://gw:9119/api/ws?ticket=abc')

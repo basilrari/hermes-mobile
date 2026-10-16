@@ -37,7 +37,6 @@ const config: CapacitorConfig = {
     // WebView origin is https://localhost. Gateway traffic is https:// and wss://
     // only; Android cleartext is off (network_security_config.xml).
     androidScheme: 'https',
-    iosScheme: 'http',
   },
 }
 
