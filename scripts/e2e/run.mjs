@@ -165,6 +165,22 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
       relayCalls.length ? relayCalls.slice(0, 3).join(' | ') : 'the relay is off on mobile',
     )
     if (process.env.HERMES_E2E_DUMP_TRACE === '1') console.log(trace ?? '(no trace)')
+
+    // The bridge contract (HM-12): the durable send journal is exposed, and the
+    // renderer's own localStorage fallback key is untouched.
+    const bridge = await page.evaluate(() => {
+      const ps = window.hermesDesktop?.preparedSubmissions
+      return {
+        journal:
+          !!ps &&
+          typeof ps.read === 'function' &&
+          typeof ps.update === 'function' &&
+          typeof ps.compareAndSet === 'function',
+        fallbackKey: window.localStorage.getItem('hermes.desktop.preparedSubmissions.v1'),
+      }
+    })
+    check(`${profile.name}: preparedSubmissions contract exposed`, bridge.journal)
+    check(`${profile.name}: journal absent from the renderer localStorage key`, bridge.fallbackKey === null)
   } finally {
     await context.close()
   }

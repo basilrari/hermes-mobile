@@ -17,3 +17,11 @@ paths = [
   # The 404-probe helper holds a deliberate bogus key constant, not a test file.
   '''apps/desktop/electron/api-expected-404\.ts$''',
 ]
+
+[[allowlists]]
+description = "Hermes storage namespaces — identifiers that merely contain KEY/TOKEN in the variable name, whose values are dotted storage paths, not credentials"
+regexTarget = "match"
+regexes = [
+  '''hermes\.preparedSubmissions[A-Za-z0-9._:]*''',
+  '''hermes\.cookies\.[A-Za-z0-9._:]*''',
+]
