@@ -93,7 +93,7 @@ Labels: `track:app`, `type:chore`, `area:identity`, `needs-device-verify`, `prio
 **ID:** HM-01 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device
 
 #### Context
-The app ID is `com.nousresearch.hermesagent.mobile`, which looks official. Basil chose `io.github.basilrari.hermesmobile`. Android treats a new ID as a new app, so this is done first and costs a **one-time reinstall** (uninstall the old APK, install the new one, log in again).
+The previous app ID looked official. Basil chose `io.github.basilrari.hermesmobile`. Android treats a new ID as a new app, so this is done first and costs a **one-time reinstall** (uninstall the old APK, install the new one, log in again).
 
 #### Tasks
 - [ ] Set `appId` in `capacitor.config.ts`; update `applicationId`/`namespace` in the Android Gradle files and move the Java/Kotlin package (`MainActivity`) to match.
