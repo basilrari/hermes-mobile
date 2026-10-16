@@ -148,22 +148,31 @@ On pavillion-claw, Basil runs the doctor as shown in [`docs/GATEWAY_SETUP.md`](G
 | #37 | `e4a4c5e` | #8 (HM-08) | Read-only gateway doctor, 31 tests. Lease check fails only on an epoch mismatch or a lease for an unknown room; two generations on different rooms warn; logs out after the capabilities call. |
 | #38 | `e5b2e4b` | #9 (HM-09) | `docs/GATEWAY_SETUP.md`: loopback 9119, `HERMES_DASHBOARD_PUBLIC_URL`, `tailscale serve --bg 9119`, interactive or stdin password hashing, systemd keep-alive on 127.0.0.1, bot markers, doctor. |
 | #35 | `639229f` | #10 (HM-10) | G0 contracts in `planning/contracts/`, approved by the lead. Codes: `groups.read` uses `4126`/`5124`, `devices.*` use `4125`/`5123`. `groups.read` joins the groups `_METHODS` tuple; `devices.*` register only in `server._methods` and the contract registry. `device_cursors` TTL is deliberately unfrozen (P2). |
+| #39 | `78b8d70` | — | This handoff doc. |
+| #41 | `8a82efa` | — | Repo standard: issue/PR templates + CI (`review-gate`, the only required check). Branch protection on `main`. |
+| #42 | `606f2c5` | #7 (HM-07) | gitleaks guard: config, `.githooks/pre-commit`, `scripts/install-hooks.sh`, and the `checks` workflow (secrets + app tests + carried patches). |
+| #43 | `d45315f` | #5 (HM-05) | Debug RPC trace: 2000-entry ring of method names/events/timings, `window.__hermesRpcTrace`, the version badge that shares it. |
+| #44 | `e19ca8f` | #6 (HM-06) | Headless harness (`npm run e2e`): four viewports, mock gateway, checklist template, turn counter. |
+| #45 | `a73318f` | #11 (HM-11) | The Desktop bot relay is off on mobile (Vite override); the harness asserts zero `bot_relay.*`. |
+| #46 | `4586313` | #16 (HM-16) | Renderer pin recorded (`450ad5055e`, already byte-identical), override table, carried-patch mechanism + CI check. |
+| #47 | `4c21384` | #12 (HM-12) | `preparedSubmissions` durable send journal in the bridge. |
+| #48 | `69f6afd` | #25 (HM-25) | `deviceIdentity()` in the bridge. |
+| #49 | `a67a475` | #13 (HM-13) | Measured on-device storage inventory + the no-conversation-state gate. |
 
-The planning files were committed directly as `ae245db`. Gate G0 is passed, so M2 contract-dependent work (#19, #21, #22, #25) may start.
-
-### Open PRs
-
-#39 (this handoff doc) only, until it merges.
+Gate G0 was passed at #35, so M2 contract-dependent work (#19, #21, #22, #25) may start; #25 has landed.
 
 ### Not done yet
 
-- **#18 patched hermes-agent branch:** started once and cancelled. No WIP exists: no HM-18 branch in this repo and no `basilrari` hermes-agent fork on GitHub. Start fresh. It blocks #19 and the rest of the M2 critical path. `docs/GATEWAY_SETUP.md` ends with a `TODO(HM-18)` placeholder for its runbook.
-- **Basil's M0 tablet checklist:** not run. It covers install of the renamed APK, HTTPS login against `https://pavillion-claw.tailfc1337.ts.net`, the WSS and ws-ticket flow, a real DeepSeek Flash reply, and a doctor report from pavillion-claw (the #8 acceptance line).
+- **#18 patched hermes-agent branch:** still not started. No HM-18 branch in this repo and no `basilrari` hermes-agent fork on GitHub. Start fresh. It blocks #19 and the rest of the M2 critical path, and it must be *deployed* on pavillion-claw, which is Basil's machine (rule 2). `docs/GATEWAY_SETUP.md` ends with a `TODO(HM-18)` placeholder for its runbook.
+- **Basil's M0 tablet checklist:** not run. Nothing in this repo can run it: it needs the tablet and the gateway password. Covers the renamed APK install, HTTPS login against `https://pavillion-claw.tailfc1337.ts.net`, the WSS and ws-ticket flow, a real DeepSeek Flash reply, and a doctor report from pavillion-claw (the #8 acceptance line).
 - **New debug APK release:** still needed. Both published releases (`v0.1.0-debug`, `v0.1.1-debug`) carry the old app ID and the cleartext build. Build from current `main` and publish a new pre-release before Basil's checklist.
+- **Upstream PRs (#19–#24, #33):** untouched. Gate G3 needs Basil's approval of each title and body before one opens, and they need a patched branch on his machine to test against.
 
 ### Issues
 
-Closed: #1, #8, #9, #10. #2 is still open even though #36 merged; close it after Basil's checklist confirms HTTPS login on the tablet. All other issues are open. Issue number N is HM-N.
+Closed: #1, #5, #6, #7, #8, #9, #10, #11, #12, #13, #16, #25. #2 is still open even though #36 merged; close it after Basil's checklist confirms HTTPS login on the tablet.
+
+Still open (24): the M0/M1 app items that need the tablet (#3, #4), the gateway items that need pavillion-claw (#17, #18, #28), the M2/M3/M4 app items that need a room-capable gateway (#14, #15, #26, #27, #29, #30, #31, #32), and the upstream set (#19–#24, #33). Issue number N is HM-N.
 
 ## 8. Order of work and critical path
 
