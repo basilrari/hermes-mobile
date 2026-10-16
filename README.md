@@ -26,6 +26,12 @@ by [@Bentlybro](https://github.com/Bentlybro). See [LICENSE](LICENSE) for MIT te
 | `patches/` | `patch-package` fix for `@capacitor-community/safe-area` (IME double padding) |
 | `docs/ARCHITECTURE.md` | How the pieces fit together |
 
+## One-time reinstall
+
+The Android application id is `io.github.basilrari.hermesmobile`. The app name stays **Hermes**.
+
+If you already installed a build with application id `com.nousresearch.hermesagent.mobile`, uninstall that app before installing this one. Android treats the new id as a different app, so the old app's data is not carried over. Sign in again after you install.
+
 ## Build a debug APK
 
 Requirements: Node 22+, JDK 21, and the Android SDK (platform 36 and build-tools; set `ANDROID_HOME`).
@@ -41,7 +47,7 @@ cd android && ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`npm test` and `npm run typecheck` inside `apps/mobile` run the bridge unit tests and the TypeScript check.
+`npm test` and `npm run typecheck` inside `apps/mobile` run the bridge unit tests, the application-id check, and the TypeScript check.
 
 ## Connecting to a gateway
 
