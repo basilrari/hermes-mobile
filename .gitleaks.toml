@@ -1,0 +1,19 @@
+# gitleaks configuration for hermes-mobile.
+#
+# History scan (2026-10-16, gitleaks 8.30.1, 27 commits): 13 hits, all
+# `generic-api-key` in upstream Hermes Desktop renderer test files. They are
+# fake fixtures (`token: 'test-…'`, `api.example.test/v1?api_key=…`,
+# `HERMES_API_EXPECTED_404`), not credentials. They are allowlisted by path
+# below; nothing else is suppressed, so a real secret anywhere still fails.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Upstream Desktop renderer test files: fake api keys/tokens in fixtures"
+paths = [
+  # Any test file, at any depth (Vitest/Vitest-DOM fixtures).
+  '''(?i).*\.(test|spec)\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$''',
+  # The 404-probe helper holds a deliberate bogus key constant, not a test file.
+  '''apps/desktop/electron/api-expected-404\.ts$''',
+]

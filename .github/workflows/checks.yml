@@ -1,0 +1,56 @@
+name: checks
+
+# Fast, non-blocking checks. The merge control is the `review-gate` job in
+# ci.yml (the only required status check). These jobs report red/green so a
+# reviewer sees a failed secret scan or a broken test run, but they do not
+# gate the merge on their own.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history: the scan covers every commit, not just the diff
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          set -euo pipefail
+          curl -sSL -o gl.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar xzf gl.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan full history (redacted)
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --verbose
+
+  app-tests:
+    name: app tests (vitest + typecheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install (skip Electron native builds)
+        run: npm ci --ignore-scripts
+      - name: Apply patches
+        run: npx patch-package
+      - name: Unit tests
+        working-directory: apps/mobile
+        run: npm test
+      - name: Typecheck
+        working-directory: apps/mobile
+        run: npm run typecheck

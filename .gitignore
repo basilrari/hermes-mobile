@@ -7,3 +7,7 @@ dist/
 local.properties
 .gradle/
 build/
+# Signed/release artefacts must never be committed. Debug APKs are attached to
+# GitHub releases; a release/keystore build stays on the machine that built it.
+release/
+
