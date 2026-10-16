@@ -15,6 +15,7 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core'
 
 import { buildApiUrl, pathWithProfileQuery } from './connection-config'
 import { captureSetCookie, cookieHeader } from './cookie-jar'
+import { rpcTrace, safeRestPath } from './rpc-trace'
 import { awaitTarget, requireReauth } from './state'
 
 export interface RawResponse {
@@ -47,8 +48,29 @@ function headerLookup(headers: Record<string, string>, name: string): string | u
 /**
  * Low-level request against an explicit base URL. Used by auth.ts (probe/login,
  * before a target is committed) and by `api<T>()`.
+ *
+ * Traced (HM-05): method, path (query stripped), millis and ok. The body — which
+ * can hold a password or a token — is never recorded.
  */
 export async function rawRequest(opts: RawRequestOptions): Promise<RawResponse> {
+  const startedAt = Date.now()
+  const method = (opts.method ?? 'GET').toUpperCase()
+  try {
+    const res = await performRequest(opts)
+    rpcTrace.record({
+      dir: 'rest',
+      name: `${method} ${safeRestPath(opts.path)}`,
+      ms: Date.now() - startedAt,
+      ok: res.status >= 200 && res.status < 300,
+    })
+    return res
+  } catch (error) {
+    rpcTrace.record({ dir: 'rest', name: `${method} ${safeRestPath(opts.path)}`, ms: Date.now() - startedAt, ok: false })
+    throw error
+  }
+}
+
+async function performRequest(opts: RawRequestOptions): Promise<RawResponse> {
   const url = buildApiUrl(opts.baseUrl, opts.path)
   const method = (opts.method ?? 'GET').toUpperCase()
 

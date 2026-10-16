@@ -7,9 +7,36 @@ import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { Clipboard } from '@capacitor/clipboard'
 import { Capacitor } from '@capacitor/core'
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { LocalNotifications } from '@capacitor/local-notifications'
+import { Share } from '@capacitor/share'
 
 import type { HermesNotification } from '@/../electron/notification-types'
+
+/**
+ * Write `text` to a cache file and open the native share sheet (HM-05: the
+ * debug RPC trace). Returns false when sharing is unavailable, so a caller can
+ * fall back to the clipboard.
+ */
+export async function shareTextFile(fileName: string, text: string): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) {
+    return writeClipboard(text)
+  }
+  try {
+    const written = await Filesystem.writeFile({
+      path: fileName,
+      data: text,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+    })
+    await Share.share({ title: fileName, url: written.uri, dialogTitle: 'Share Hermes trace' })
+    return true
+  } catch {
+    // No share target, or Filesystem denied: clipboard is the honest fallback.
+    return writeClipboard(text)
+  }
+}
+
 
 export async function writeClipboard(text: string): Promise<boolean> {
   try {
