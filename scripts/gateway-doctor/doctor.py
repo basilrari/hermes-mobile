@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Read-only checks for the Hermes install on this machine.
 
+Grounded in NousResearch/hermes-agent
+4e59ac2b883b4133ea8a2d299abac45189781c09. That commit is not in the
+hermes-mobile checkout; the line numbers were read from the remote.
+
 The dashboard password is read from HERMES_DASHBOARD_PASSWORD and is never
-printed. SQLite is opened with mode=ro (hermes_state_holders.read_only_db_uri
-in NousResearch/hermes-agent). Nothing here writes a database, a config file,
-or a lease.
+printed. SQLite is opened with mode=ro, the same shape as
+hermes_state_holders.read_only_db_uri:
+https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/hermes_state_holders.py#L27-L30
+Nothing here writes a database, a config file, or a lease.
 
 Exit status is 1 when any check is fail, and 0 when every check is pass or warn.
 """
@@ -84,7 +89,10 @@ def open_ro(path: Path) -> sqlite3.Connection:
 
 
 def shared_state_path(home: Path) -> Path:
-    """Root shared-state.db. Mirrors gateway/hosted_rooms.py:default_db_path."""
+    """Root shared-state.db. Mirrors default_db_path.
+
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/gateway/hosted_rooms.py#L404-L419
+    """
     if home.parent.name == "profiles":
         return home.parent.parent / "shared-state.db"
     return home / "shared-state.db"
@@ -94,8 +102,11 @@ def classify_argv(argv: list[str]) -> str | None:
     """`hermes dashboard` or a long-running `gateway` / `gateway run`.
 
     `hermes gateway status` (and setup/install/start/stop) is not the service.
-    The service process is `hermes gateway run` (hermes_cli/gateway.py) or a
-    foreground `hermes gateway` with no further subcommand.
+    The service process is `hermes gateway run` (ExecStart) or a foreground
+    `hermes gateway` with no further subcommand. `--replace` is still `run`.
+
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/hermes_cli/gateway.py#L3257-L3271
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/hermes_cli/gateway.py#L4401-L4404
     """
     if "--stop" in argv:
         return None
@@ -153,7 +164,10 @@ def pids_holding_db(proc_root: Path, db_path: Path, pids: list[int]) -> list[int
 
 
 def live_profiles(home: Path) -> list[Path]:
-    """Named profiles, same identity rules as hermes_constants.named_profile_is_live."""
+    """Named profiles, same identity rules as hermes_constants.named_profile_is_live.
+
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/hermes_constants.py#L400-L405
+    """
     root = home / "profiles"
     if not root.is_dir():
         return []
@@ -244,6 +258,13 @@ def _table_names(conn: sqlite3.Connection) -> set[str]:
 
 
 def check_bot_chats(home: Path) -> Check:
+    """Each live named profile under profiles/ must have a Bot Chat session.
+
+    The root install's state.db (~/.hermes/state.db) is not scanned.
+    named_profile_is_live only treats a directory under profiles/ as a named
+    profile, and a Bot Chat is created inside that profile. This check assumes
+    the root profile does not need its own Bot Chat.
+    """
     profiles = live_profiles(home)
     if not profiles:
         return Check("bot_chats", "fail", "no live profiles under profiles/")
@@ -322,7 +343,30 @@ def check_processes(proc_root: Path) -> tuple[Check, list[tuple[str, int]]]:
     return Check("processes", "pass", detail), found
 
 
+def _open_db_note(proc_root: Path, db_path: Path, processes: list[tuple[str, int]]) -> str:
+    """Who has the file open. This is not evidence of a lease."""
+    pids = [pid for _role, pid in processes]
+    holders = pids_holding_db(proc_root, db_path, pids)
+    if holders is None:
+        return "processes with the DB open: unreadable"
+    if not holders:
+        return "processes with the DB open: none"
+    named = ", ".join(f"{role} pid {pid}" for role, pid in processes if pid in holders)
+    return "processes with the DB open: " + named
+
+
 def check_driver_lease(home: Path, proc_root: Path, processes: list[tuple[str, int]], now: float) -> Check:
+    """One lease row per room. Open file descriptors are not a lease.
+
+    acquire_lease is keyed by room_id:
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/gateway/hosted_room_driver.py#L244-L249
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/gateway/hosted_room_driver.py#L532-L567
+
+    Two live process_generation values on different rooms are a warning.
+    Fail only when a live lease's authority_epoch disagrees with that room's
+    hosted_rooms.authority_epoch, or the lease names a room_id that is not in
+    hosted_rooms. A disbanded room that is still in the table is known.
+    """
     db_path = shared_state_path(home)
     if not db_path.is_file():
         return Check("driver_lease", "warn", "shared-state.db is absent; no hosted rooms")
@@ -335,59 +379,69 @@ def check_driver_lease(home: Path, proc_root: Path, processes: list[tuple[str, i
         if "hosted_rooms" not in tables:
             return Check("driver_lease", "warn", "shared-state.db has no hosted_rooms table")
         rooms = conn.execute(
-            "SELECT room_id, authority_epoch FROM hosted_rooms WHERE disbanded_at IS NULL"
+            "SELECT room_id, authority_epoch, disbanded_at FROM hosted_rooms"
         ).fetchall()
         leases = []
         if "hosted_room_driver_leases" in tables:
             leases = conn.execute(
-                "SELECT process_generation, authority_epoch, expires_at, released_at "
+                "SELECT room_id, process_generation, authority_epoch, expires_at, released_at "
                 "FROM hosted_room_driver_leases"
             ).fetchall()
     finally:
         conn.close()
+    note = _open_db_note(proc_root, db_path, processes)
+    known = {row["room_id"]: int(row["authority_epoch"]) for row in rooms}
+    active = [row for row in rooms if row["disbanded_at"] is None]
     live = [
         row for row in leases
         if row["released_at"] is None and row["expires_at"] is not None and float(row["expires_at"]) > now
     ]
-    generations = sorted({row["process_generation"] for row in live})
+    unknown = []
+    mismatched = []
+    for row in live:
+        room_id = row["room_id"]
+        if room_id not in known:
+            unknown.append(str(room_id))
+            continue
+        if int(row["authority_epoch"]) != known[room_id]:
+            mismatched.append(
+                f"{room_id} lease {int(row['authority_epoch'])} != room {known[room_id]}"
+            )
+    generations = sorted({str(row["process_generation"]) for row in live if row["process_generation"]})
+    live_rooms = {row["room_id"] for row in live}
     epochs = sorted({int(row["authority_epoch"]) for row in live}) or sorted(
-        {int(row["authority_epoch"]) for row in rooms}
+        int(row["authority_epoch"]) for row in active
     )
     epoch_text = ",".join(str(epoch) for epoch in epochs) if epochs else "none"
-    if len(generations) > 1:
-        short = ",".join(gen[:8] for gen in generations)
-        return Check(
-            "driver_lease", "fail",
-            f"{len(generations)} live leases ({short}) authority_epoch={epoch_text}",
-        )
+    if unknown or mismatched:
+        parts = []
+        if unknown:
+            parts.append("lease for unknown room " + ",".join(unknown))
+        if mismatched:
+            parts.append("epoch mismatch " + "; ".join(mismatched))
+        detail = "; ".join(parts)
+        if generations:
+            detail += "; process_generation=" + ",".join(item[:8] for item in generations)
+        return Check("driver_lease", "fail", detail + "; " + note)
     if not generations:
-        if rooms:
+        if active:
             return Check(
                 "driver_lease", "warn",
-                f"{len(rooms)} room(s), no unexpired lease; authority_epoch={epoch_text}",
+                f"{len(active)} room(s), no unexpired lease; authority_epoch={epoch_text}; {note}",
             )
-        return Check("driver_lease", "warn", "no rooms and no live driver lease")
-    generation = generations[0][:8]
-    pids = [pid for _role, pid in processes]
-    holders = pids_holding_db(proc_root, db_path, pids)
-    base = f"process_generation={generation} authority_epoch={epoch_text}"
-    if holders is None:
-        return Check("driver_lease", "warn", base + "; process fds not readable, pid not known")
-    if len(holders) == 1:
-        role = next(role for role, pid in processes if pid == holders[0])
-        return Check(
-            "driver_lease", "pass",
-            f"only {role} pid {holders[0]} has shared-state.db open; {base}",
-        )
-    if len(holders) > 1:
-        named = ", ".join(
-            f"{role} pid {pid}" for role, pid in processes if pid in holders
-        )
+        return Check("driver_lease", "warn", "no rooms and no live driver lease; " + note)
+    short = ",".join(item[:8] for item in generations)
+    if len(generations) > 1:
+        where = " on different rooms" if len(live_rooms) > 1 else ""
         return Check(
             "driver_lease", "warn",
-            f"{named} have shared-state.db open; lease does not store a pid; {base}",
+            f"{len(generations)} live process_generation values{where} ({short}); "
+            f"authority_epoch={epoch_text}; {note}",
         )
-    return Check("driver_lease", "warn", base + "; no hermes process has the db open")
+    return Check(
+        "driver_lease", "pass",
+        f"process_generation={short} authority_epoch={epoch_text}; {note}",
+    )
 
 
 def check_capabilities(result: dict | Exception | None) -> Check:
@@ -513,19 +567,57 @@ def http_get(url: str, timeout: float = 10) -> tuple[int, bytes]:
         return response.status, response.read(1_000_000)
 
 
-def fetch_capabilities(base_url: str, username: str, password: str, timeout: float = 15) -> dict:
-    """POST /auth/password-login, POST /api/auth/ws-ticket, then groups.capabilities.
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """auth_logout answers 302. Leave that status for the caller."""
 
-    Login body shape: plugins/dashboard_auth/basic (provider "basic") and
-    hermes_cli/dashboard_auth/routes.py auth_password_login. The ticket is
-    query param `ticket` on /api/ws (hermes_cli/web_server_chat.py:_ws_auth_reason).
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _logout(opener, origin: str, timeout: float) -> None:
+    """POST /auth/logout and discard the response.
+
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/hermes_cli/dashboard_auth/routes.py#L496-L510
+    answers 302. A failed logout leaves the server session until its TTL.
+    The body, the ticket, and the URL are not returned.
+    """
+    request = urllib.request.Request(
+        origin + "/auth/logout",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            response.read()
+    except urllib.error.HTTPError:
+        return
+    except urllib.error.URLError:
+        return
+    except OSError:
+        return
+
+
+def fetch_capabilities(base_url: str, username: str, password: str, timeout: float = 15) -> dict:
+    """POST /auth/password-login, POST /api/auth/ws-ticket, groups.capabilities, then logout.
+
+    Provider name "basic":
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/plugins/dashboard_auth/basic/__init__.py#L114-L119
+    Login route:
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/hermes_cli/dashboard_auth/routes.py#L447-L455
+    The ticket is query param `ticket` on /api/ws:
+    https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/hermes_cli/web_server_chat.py#L200-L216
+
+    Logout runs after the RPC, success or failure. A logout error does not
+    change this function's result and is not printed. If logout fails, the
+    server session stays open until its TTL.
     """
     parts = urllib.parse.urlsplit(base_url)
     if parts.scheme != "https" or parts.username or parts.password:
         raise RpcError("refusing non-https URL")
     origin = f"{parts.scheme}://{parts.netloc}"
     jar = urllib.request.HTTPCookieProcessor()
-    opener = urllib.request.build_opener(jar)
+    opener = urllib.request.build_opener(jar, _NoRedirect())
     _post_ok(opener, origin + "/auth/password-login", {
         "provider": "basic", "username": username, "password": password,
     }, "password login", timeout)
@@ -536,6 +628,10 @@ def fetch_capabilities(base_url: str, username: str, password: str, timeout: flo
     try:
         return ws_rpc(origin, ticket, "groups.capabilities", {}, timeout)
     finally:
+        try:
+            _logout(opener, origin, timeout)
+        except Exception:
+            pass
         del ticket
 
 

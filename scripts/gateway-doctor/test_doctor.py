@@ -213,7 +213,8 @@ class DoctorTests(unittest.TestCase):
             "driver_lease": "pass",
         })
         self.assertIn("stock gateway", text)
-        self.assertIn("only dashboard pid 20", text)
+        self.assertIn("processes with the DB open: dashboard pid 20", text)
+        self.assertNotIn("only dashboard", text)
         self.assertNotIn("pid 11", text)
         self.assertNotIn("pid 12", text)
         self.assertNotIn(SECRET, text)
@@ -224,25 +225,60 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertEqual(_sha(db), before[db])
 
-    def test_both_holders_warn_and_still_exit_0(self) -> None:
+    def test_both_holders_are_informational_and_exit_0(self) -> None:
         self._healthy_files(holders=[20, 30])
         code, text, _calls = self._run()
         self.assertEqual(code, 0)
-        self.assertEqual(_statuses(text)["driver_lease"], "warn")
-        self.assertIn("lease does not store a pid", text)
+        self.assertEqual(_statuses(text)["driver_lease"], "pass")
+        detail = _detail(text, "driver_lease")
+        self.assertIn("processes with the DB open: dashboard pid 20, gateway pid 30", detail)
+        self.assertNotIn("lease does not store a pid", text)
+        self.assertNotIn("only dashboard", text)
         self.assertNotIn(SECRET, text)
 
-    def test_two_live_generations_fail(self) -> None:
+    def test_two_live_generations_on_different_rooms_warn(self) -> None:
         self._healthy_files()
         _shared(self.home, [
             ("room-1", "gw", 3, "aaaaaaaa-1111", NOW + 60, None),
             ("room-2", "gw", 4, "bbbbbbbb-2222", NOW + 60, None),
         ], rooms=[("room-1", "gw", 3, None), ("room-2", "gw", 4, None)])
         code, text, _calls = self._run()
+        self.assertEqual(code, 0)
+        self.assertEqual(_statuses(text)["driver_lease"], "warn")
+        detail = _detail(text, "driver_lease")
+        self.assertIn("on different rooms", detail)
+        self.assertIn("aaaaaaaa", detail)
+        self.assertIn("bbbbbbbb", detail)
+
+    def test_lease_epoch_mismatch_fails(self) -> None:
+        self._healthy_files()
+        _shared(self.home, [
+            ("room-1", "gw", 9, "aaaaaaaa-1111", NOW + 60, None),
+        ], rooms=[("room-1", "gw", 3, None)])
+        code, text, _calls = self._run()
         self.assertEqual(code, 1)
         self.assertEqual(_statuses(text)["driver_lease"], "fail")
-        self.assertIn("aaaaaaaa", text)
-        self.assertIn("bbbbbbbb", text)
+        self.assertIn("epoch mismatch room-1 lease 9 != room 3", _detail(text, "driver_lease"))
+
+    def test_lease_for_unknown_room_fails(self) -> None:
+        self._healthy_files()
+        _shared(self.home, [
+            ("room-missing", "gw", 3, "aaaaaaaa-1111", NOW + 60, None),
+        ], rooms=[("room-1", "gw", 3, None)])
+        code, text, _calls = self._run()
+        self.assertEqual(code, 1)
+        self.assertEqual(_statuses(text)["driver_lease"], "fail")
+        self.assertIn("lease for unknown room room-missing", _detail(text, "driver_lease"))
+
+    def test_disbanded_room_is_a_known_room(self) -> None:
+        self._healthy_files()
+        _shared(self.home, [
+            ("room-1", "gw", 3, "abcdef1234567890", NOW + 60, None),
+        ], rooms=[("room-1", "gw", 3, NOW - 10)])
+        code, text, _calls = self._run()
+        self.assertEqual(code, 0)
+        self.assertEqual(_statuses(text)["driver_lease"], "pass")
+        self.assertNotIn("unknown room", text)
 
     def test_missing_bot_chat_fails(self) -> None:
         self._healthy_files()
@@ -336,6 +372,54 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertNotIn(SECRET, text)
         self.assertIn("[redacted]", _detail(text, "groups_capabilities"))
+
+    def test_password_bearing_exception_is_redacted_for_every_check(self) -> None:
+        self._healthy_files()
+        checks = [
+            doctor.check_scheme(f"https://user:{SECRET}@example.test"),
+            doctor.check_https_answer(RuntimeError(SECRET)),
+            doctor.check_api_status(RuntimeError(SECRET)),
+            doctor.check_capabilities(doctor.RpcError(f"login failed {SECRET}")),
+            doctor.check_capabilities(RuntimeError(SECRET)),
+        ]
+
+        def boom_db(*_args, **_kwargs):
+            raise sqlite3.OperationalError(SECRET)
+
+        with mock.patch.object(doctor, "open_ro", boom_db):
+            checks.append(doctor.check_bot_chats(self.home))
+            checks.append(doctor.check_driver_lease(
+                self.home, self.proc, [("dashboard", 20)], NOW))
+
+        def boom_read(*_args, **_kwargs):
+            raise OSError(SECRET)
+
+        with mock.patch.object(Path, "read_text", boom_read):
+            checks.append(doctor.check_ui_meta(self.home))
+
+        def boom_proc(_root):
+            raise FileNotFoundError(SECRET)
+
+        with mock.patch.object(doctor, "list_processes", boom_proc):
+            checks.append(doctor.check_processes(self.proc)[0])
+
+        self.assertEqual(
+            {check.name for check in checks},
+            {
+                "https_url", "https_answer", "api_status", "groups_capabilities",
+                "bot_chats", "ui_meta", "processes", "driver_lease",
+            },
+        )
+        text = doctor.render(checks, [SECRET])
+        self.assertNotIn(SECRET, text)
+        self.assertIn("[redacted]", text)
+        self.assertEqual(_detail(text, "https_answer"), "HTTPS request failed")
+        self.assertEqual(_detail(text, "api_status"), "no response")
+        self.assertIn("[redacted]", _detail(text, "groups_capabilities"))
+        self.assertNotIn(SECRET, _detail(text, "bot_chats"))
+        self.assertNotIn(SECRET, _detail(text, "driver_lease"))
+        self.assertNotIn(SECRET, _detail(text, "ui_meta"))
+        self.assertNotIn(SECRET, _detail(text, "processes"))
 
     def test_generic_exception_hides_message(self) -> None:
         self._healthy_files()
@@ -478,11 +562,70 @@ class DoctorTests(unittest.TestCase):
                 doctor._post_ok(opener, url, {"password": SECRET}, "password login", 2)
         finally:
             server.shutdown()
+            server.server_close()
             thread.join(timeout=2)
         self.assertEqual(str(caught.exception), "password login failed: HTTP 401")
         self.assertNotIn(SECRET, str(caught.exception))
         self.assertNotIn(TICKET, str(caught.exception))
         self.assertIn(SECRET.encode(), seen["body"])
+
+    def test_logout_discards_302_body(self) -> None:
+        seen = {"paths": []}
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                self.rfile.read(length)
+                seen["paths"].append(self.path)
+                body = f"bye {SECRET} {TICKET}".encode()
+                self.send_response(302)
+                self.send_header("Location", "/login")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, _fmt, *_args):
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            opener = __import__("urllib.request").request.build_opener(doctor._NoRedirect())
+            origin = f"http://127.0.0.1:{server.server_address[1]}"
+            doctor._logout(opener, origin, 2)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+        self.assertEqual(seen["paths"], ["/auth/logout"])
+
+    def test_fetch_capabilities_logs_out_and_logout_failure_is_quiet(self) -> None:
+        calls = []
+
+        def logout(_opener, origin, _timeout):
+            calls.append(origin)
+            raise RuntimeError(SECRET)
+
+        with mock.patch.object(doctor, "_post_ok"), \
+                mock.patch.object(doctor, "_post_json", return_value={"ticket": TICKET}), \
+                mock.patch.object(doctor, "ws_rpc", return_value={"driver": True}), \
+                mock.patch.object(doctor, "_logout", logout):
+            result = doctor.fetch_capabilities("https://example.test", "basil", SECRET, timeout=1)
+        self.assertEqual(result, {"driver": True})
+        self.assertEqual(calls, ["https://example.test"])
+
+        def fail_rpc(*_args, **_kwargs):
+            raise doctor.RpcError("groups.capabilities error code -32601")
+
+        with mock.patch.object(doctor, "_post_ok"), \
+                mock.patch.object(doctor, "_post_json", return_value={"ticket": TICKET}), \
+                mock.patch.object(doctor, "ws_rpc", fail_rpc), \
+                mock.patch.object(doctor, "_logout", logout):
+            with self.assertRaises(doctor.RpcError) as caught:
+                doctor.fetch_capabilities("https://example.test", "basil", SECRET, timeout=1)
+        self.assertEqual(str(caught.exception), "groups.capabilities error code -32601")
+        self.assertNotIn(SECRET, str(caught.exception))
 
     def test_ws_rpc_skips_non_text_and_hides_ticket(self) -> None:
         features = sorted(doctor.STOCK_FEATURES)
