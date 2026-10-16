@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.nousresearch.hermesagent.mobile',
+  appId: 'io.github.basilrari.hermesmobile',
   appName: 'Hermes',
   webDir: 'dist',
   // CapacitorHttp routes the bridge's REST calls (login + ws-ticket) through

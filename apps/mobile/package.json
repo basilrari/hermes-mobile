@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "vitest run",
+    "test": "vitest run && node ../../scripts/check-legacy-app-id.mjs",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "cap:sync": "cap sync",
     "cap:android": "cap sync android && cap open android",

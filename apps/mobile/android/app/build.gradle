@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.nousresearch.hermesagent.mobile"
+    namespace = "io.github.basilrari.hermesmobile"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.nousresearch.hermesagent.mobile"
+        applicationId "io.github.basilrari.hermesmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2
