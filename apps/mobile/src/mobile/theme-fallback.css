@@ -112,11 +112,12 @@ body {
    little, not a lot. */
 [data-slot='statusbar'] {
   height: 1.75rem !important;
-  /* Show every control; scroll the bar horizontally rather than cram or clip.
-     Note this deliberately overrides the renderer's `overflow-x-clip` on the
-     clusters below, which exists to stop a wide item painting a scrollbar. On a
-     phone the scroll strip is the intended behaviour; see the chip override at
-     the end of this file, which makes the chips shrink first. */
+  /* Wider than a phone: scroll the bar rather than cram. This overrides the
+     renderer's `overflow-x-clip` on the clusters, which exists to stop a wide
+     item painting a scrollbar. Phone width does the opposite — the media query
+     at the end of this file lets the clusters shrink. A hidden scrollbar plus
+     `flex: 0 0 auto` was clipping the host name with no affordance, and the
+     harness then exempted that overflow. */
   justify-content: flex-start !important;
   overflow-x: auto !important;
   scrollbar-width: none;
@@ -211,6 +212,19 @@ body {
  * one, so an upstream class rename cannot silently widen this.
  */
 @media (max-width: 47.5rem) {
+  /* The chip rule below cannot shrink a button whose parent is `flex: 0 0 auto`
+     (sized to content) inside a footer with `overflow-x: auto`. Measured at
+     412px that left the cluster at right=517 locally and right=545 on CI, and
+     the scroller exemption turned it into a green check. Constrain the parent
+     so the chips ellipsise inside the viewport. */
+  [data-slot='statusbar'] {
+    overflow-x: hidden !important;
+  }
+  [data-slot='statusbar'] > * {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden !important;
+  }
   [data-slot='statusbar'] div.min-w-0 > button {
     min-width: 0;
     overflow: hidden;

@@ -155,6 +155,9 @@ async function openClient(browser, profile, origin) {
  *   5. `outerHTML` was embedded in the detail, putting app markup (and any
  *      attribute a user or host typed) into an artefact that is otherwise
  *      "keys and sizes only". Geometry only now.
+ *
+ * Round-3: the status bar is not an exempted strip (chips must fit), and the
+ * touch allowlist is compared to every offender, not the first five.
  */
 const MIN_TOUCH_PX = 24
 const POLISH_TOUCH_PX = 32
@@ -174,7 +177,7 @@ const KNOWN_UNDER_FLOOR = [
 ]
 
 async function layoutFindings(page) {
-  return page.evaluate(({ minTouch, polishTouch, maxReport }) => {
+  return page.evaluate(({ minTouch, polishTouch }) => {
     const vw = window.innerWidth
     const vh = window.innerHeight
     const visible = (el) => {
@@ -185,6 +188,10 @@ async function layoutFindings(page) {
     }
 
     const inHorizontalScroller = (el) => {
+      // The status bar is not a waiver. This pass exists to contain it. An
+      // `overflow-x: auto` footer made this return true and the check stayed
+      // green while chips sat past the edge (right=545 in a 412 viewport on CI).
+      if (el.closest("[data-slot='statusbar']")) return false
       for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
         const style = window.getComputedStyle(node)
         if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && node.scrollWidth > node.clientWidth + 1) return true
@@ -218,8 +225,10 @@ async function layoutFindings(page) {
       if (elementOverflow.length >= 4) break
     }
 
-    // Counted in full, reported up to a cap — the old `break` at 5 made the note
-    // read like a total when it was a cap (round-2 finding).
+    // Counted in full. The assertion compares every offender to the allowlist;
+    // the caller caps only the printed sample. A cap here hid a 6th label
+    // (round-3 finding): the check then said "all known debt" about a list it
+    // had not inspected.
     let touchTotal = 0
     const touchOffenders = []
     for (const el of document.querySelectorAll('button, a[href], input, textarea, select, [role="button"]')) {
@@ -230,9 +239,7 @@ async function layoutFindings(page) {
       if (r.width * r.height <= 4) continue
       if (Math.min(r.width, r.height) < minTouch) {
         touchTotal += 1
-        if (touchOffenders.length < maxReport) {
-          touchOffenders.push(`${el.tagName.toLowerCase()}[${(el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 24)}]=${Math.round(r.width)}x${Math.round(r.height)}`)
-        }
+        touchOffenders.push(`${el.tagName.toLowerCase()}[${(el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 24)}]=${Math.round(r.width)}x${Math.round(r.height)}`)
       }
     }
 
@@ -268,7 +275,7 @@ async function layoutFindings(page) {
         .map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.width, r.height) })
         .filter((v) => v > 0 && v < polishTouch).length,
     }
-  }, { minTouch: MIN_TOUCH_PX, polishTouch: POLISH_TOUCH_PX, maxReport: MAX_TOUCH_REPORT })
+  }, { minTouch: MIN_TOUCH_PX, polishTouch: POLISH_TOUCH_PX })
 }
 
 /**
@@ -365,9 +372,13 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     // pinned in KNOWN_UNDER_FLOOR (issue #55) so THIS check cannot go quiet: any
     // offender that is not the known debt fails it.
     const unexpected = layout.touchOffenders.filter((o) => !KNOWN_UNDER_FLOOR.some((known) => o.startsWith(known)))
+    const sample = (list) => {
+      const head = list.slice(0, MAX_TOUCH_REPORT).join(' | ')
+      return list.length > MAX_TOUCH_REPORT ? `${head} (+${list.length - MAX_TOUCH_REPORT} more)` : head
+    }
     const touchDetail = layout.touchTotal === 0
       ? 'all visible controls >= floor'
-      : `${layout.touchTotal >= MAX_TOUCH_REPORT ? '>=' : ''}${layout.touchTotal} under the ${MIN_TOUCH_PX}px floor${unexpected.length ? ` — NEW: ${unexpected.join(' | ')}` : ` — all known debt (#55): ${layout.touchOffenders.join(' | ')}`}`
+      : `${layout.touchTotal} under the ${MIN_TOUCH_PX}px floor${unexpected.length ? ` — NEW: ${sample(unexpected)}` : ` — all known debt (#55): ${sample(layout.touchOffenders)}`}`
     check(`${profile.name}: no NEW control under the ${MIN_TOUCH_PX}px touch floor`, unexpected.length === 0, touchDetail)
     if (layout.polishTargets > 0) {
       note(`${profile.name}: ${layout.polishTargets} control(s) under ${POLISH_TOUCH_PX}px — polish list, not breakage`)
@@ -472,9 +483,24 @@ async function runTwoClients(browser, origin, gatewayUrl, token) {
       await page.getByLabel('Session token').waitFor({ state: 'visible', timeout: 20_000 })
       await page.getByLabel('Session token').fill(token)
       await page.getByRole('button', { name: 'Connect' }).click()
-      await page.getByText('Sessions', { exact: false }).first().waitFor({ state: 'visible', timeout: 45_000 })
+      // Phone portrait does not mount the Sessions pane until Show sidebar
+      // (below 640px; mobile-behaviors.tsx). Waiting only for "Sessions" timed
+      // out on CI after the tablet had connected (run 38923939411, run.mjs:475).
+      // finishSignIn is the shell-ready check runProfile already passes on that
+      // viewport: dismiss onboarding, then NEW SESSION or Sessions.
+      await finishSignIn(page)
       check(`two clients: ${label} connected`, true)
     }
+  } catch (error) {
+    const phoneState = await b.page.evaluate(() => ({
+      newSession: document.body.innerText.includes('NEW SESSION'),
+      sessions: document.body.innerText.includes('Sessions'),
+      showSidebar: document.body.innerText.includes('Show sidebar'),
+      connecting: document.body.innerText.includes('CONNECTING'),
+      onboarding: /choose a provider later/i.test(document.body.innerText),
+    })).catch(() => null)
+    console.error(`two clients: phone shell state ${JSON.stringify(phoneState)}`)
+    throw error
   } finally {
     await Promise.all([a.context.close(), b.context.close()])
   }
