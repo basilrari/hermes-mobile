@@ -88,3 +88,41 @@ Every override is registered in `apps/mobile/vite.config.ts` and must have a row
 |---|---|---|---|
 | `src/overrides/hermes-bots-relay.ts` (HM-11) | `plugins/hermes-bots/plugin.tsx`'s `./relay` import | The Desktop bot relay publishes each gateway the roster of agents on its **other** connections. Mobile has one connection, so it publishes an **empty** roster and `write_remote_roster` replaces `roster.json` wholesale (upstream #115161) — opening the app could wipe a Desktop's roster. | Upstream stops publishing an empty roster for a sole connection (#115161). |
 
+## Device storage (HM-13)
+
+**Rule: the device holds UI preferences and bridge state. Never conversation
+state.** Option D puts messages, room logs and session history on the gateway, so
+a key holding any of those on the device is a bug, not a cache.
+
+The inventory below is **measured**, not guessed: the harness logs in, reaches the
+Bots roster and dumps every storage key with its size (keys and sizes only —
+never a value, so no credential can reach the artefact). Reproduce with
+`npm run e2e`; the classified dump lands in `scripts/e2e/screenshots/storage-inventory.json`.
+The harness **fails** if a key matches the conversation-state pattern, and
+*reports* any key it cannot classify so that each one gets a row here.
+
+Measured 2026-10-16 (token gateway, four viewports, after login + roster):
+**30 `localStorage` keys, 0 `sessionStorage` keys, 0 IndexedDB databases.**
+
+| Key pattern | Class | Why it is allowed |
+|---|---|---|
+| `CapacitorStorage.hermes.target` | bridge state | The saved gateway URL + auth mode (and the session token in token mode). User-entered, on-device only, never committed. |
+| `CapacitorStorage.hermes.cookies.<host>` | bridge state | OAuth session cookies, per gateway. Absent in a token-mode run. |
+| `CapacitorStorage.hermes.preparedSubmissions.v1` | bridge state | The HM-12 send journal: in-flight sends only, never history. |
+| `CapacitorStorage.hermes.device.id.v1`, `.device.label.v1` | bridge state | The HM-25 device identity. Not a secret, not a hardware id. |
+| `hermes-boot-background`, `hermes-boot-color-scheme` | UI preference | Chosen before first paint. |
+| `hermes-desktop-active-profile-v1` | UI preference | Last profile shown. |
+| `hermes.desktop.*` | UI preference / rebuildable cache | Layout tree, pane states, theme, tool view, keybinds, tutorials, `model-pricing.v1` (a cache). |
+| `hermes.updates.last-passive-check` | UI preference | A timestamp. |
+| `hermes.desktop.preparedSubmissions.spent.*` | rebuildable cache | Send tombstones; appears only after a send. |
+
+Nothing here is conversation state, and `stubs.ts` was reviewed for this rule: it
+declares 65 inert async defaults and reaches no storage API at all.
+
+**Not yet covered:** this dump is the login → roster surface. Keys that only
+appear once a **room** or a **long session** is open (the room map the plan flags
+in `group-chat.ts`, and the send tombstones) are not exercised here, because the
+harness cannot open a hosted room without a room-capable gateway. Re-run this
+inventory after HM-26 (the integration path) and add any new key here.
+
+
