@@ -4,7 +4,7 @@ Status: **proposed for gate G0**. Not signed off.
 
 The gateway flags for the new behaviour are `event_push`, `read_cursors`, and `device_cursors` (`groups-event.md`, `read-cursors.md`, `device-identity.md`). This file is the `window.hermesDesktop` surface the renderer already branches on. It is not a JSON-RPC method.
 
-Grounded in NousResearch/hermes-agent `4e59ac2b` `apps/desktop/electron/preload.ts` and `apps/desktop/src/global.d.ts` (both at the `preparedSubmissions` block, line 432). The same block is what this repo vendors. `deviceIdentity` is not in that tree.
+Grounded in NousResearch/hermes-agent [`4e59ac2b883b4133ea8a2d299abac45189781c09`](https://github.com/NousResearch/hermes-agent/commit/4e59ac2b883b4133ea8a2d299abac45189781c09) [`preload.ts` L432-L437](https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/apps/desktop/electron/preload.ts#L432-L437) and [`global.d.ts` L432-L442](https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/apps/desktop/src/global.d.ts#L432-L442). Line 431 in both files is the closing `},` of `settings`, not `preparedSubmissions`. The same block is what this repo vendors. `deviceIdentity` is not in that tree.
 
 ## What exists today
 
