@@ -1,0 +1,19 @@
+#!/bin/sh
+# gitleaks pre-commit guard for hermes-mobile.
+#
+# Blocks a commit that stages a secret (gateway password, DeepSeek key,
+# keystore material). Enable once per checkout:
+#
+#     scripts/install-hooks.sh
+#
+# Bypass deliberately (and rarely) with `git commit --no-verify`.
+set -eu
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks: not installed; skipping the staged secret scan." >&2
+  echo "gitleaks: install it, then re-run: https://github.com/gitleaks/gitleaks#installing" >&2
+  exit 0
+fi
+
+# Scan only what is staged. --redact keeps any matched value out of the output.
+exec gitleaks git --staged --config .gitleaks.toml --redact --verbose

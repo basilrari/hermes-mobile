@@ -74,6 +74,11 @@ Put both the gateway host and the phone on the same tailnet and publish the dash
 ## Security notes
 
 - The repo contains no secrets. Tokens and passwords are entered at runtime only.
+- A gitleaks guard protects every commit. Run `scripts/install-hooks.sh` once per
+  checkout to enable the pre-commit hook; CI runs the same scan over the full
+  history (`.github/workflows/checks.yml`, config `.gitleaks.toml`). History was
+  scanned once on 2026-10-16: 13 `generic-api-key` hits, all fake fixtures in
+  upstream Desktop renderer test files (allowlisted by path); no real secret.
 - The debug APK is signed with the standard Android debug key. Don't distribute it as a production build.
 - `androidScheme` is `https`, so the WebView origin is `https://localhost`.
 - Android does not permit cleartext traffic. The connect screen accepts only `https://` gateway URLs.
