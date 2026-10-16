@@ -32,6 +32,7 @@ import { RootTooltipProvider } from '@/components/ui/tooltip'
 import { ThemeProvider } from '@/themes/context'
 
 import { MobileRoot } from './app'
+import { TraceBadge } from '~mobile/TraceBadge'
 
 installClipboardShim()
 
@@ -45,6 +46,7 @@ createRoot(document.getElementById('root')!).render(
               <RootTooltipProvider>
                 <HashRouter useTransitions={false}>
                   <MobileRoot />
+                  <TraceBadge />
                 </HashRouter>
               </RootTooltipProvider>
             </HapticsProvider>

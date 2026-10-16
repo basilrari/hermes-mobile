@@ -11,6 +11,9 @@ import { defineConfig } from 'vite'
 // Resolve a path relative to this config file.
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
+// The app version shown in the debug trace badge (HM-05).
+const pkg = JSON.parse(fs.readFileSync(r('./package.json'), 'utf8')) as { version: string }
+
 // Resolve packages from the desktop workspace (mirrors upstream apps/desktop/vite.config.ts)
 // so react/react-dom/driver.js are the exact copies the renderer was built against.
 const requireFromDesktop = createRequire(r('../desktop/vite.config.ts'))
@@ -42,6 +45,7 @@ function compilerPreset() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), babel({ presets: [compilerPreset()] }), tailwindcss(), emojibaseAssets()],
+  define: { __HERMES_APP_VERSION__: JSON.stringify(pkg.version) },
   css: { postcss: { plugins: [] } },
   resolve: {
     alias: {
