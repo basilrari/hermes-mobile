@@ -1,4 +1,4 @@
-package com.nousresearch.hermesagent.mobile;
+package io.github.basilrari.hermesmobile;
 
 import android.content.Context;
 import android.net.wifi.WifiManager;
