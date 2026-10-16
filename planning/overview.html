@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hermes-mobile: continuity plan</title>
+<style>
+  :root{--fg:#1b1f24;--muted:#5b6470;--bg:#fff;--card:#f5f7fa;--line:#d8dee6;--a:#1d76db;--b:#5319e7;--ok:#1a7f37;--new:#b35900;--warn:#b60205}
+  @media (prefers-color-scheme:dark){:root{--fg:#e6e8eb;--muted:#9aa4b0;--bg:#111418;--card:#1a1f26;--line:#2c333d}}
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--fg);background:var(--bg)}
+  main{max-width:760px;margin:0 auto;padding:18px 16px 48px}
+  h1{font-size:1.5rem;margin:.2em 0}
+  h2{font-size:1.15rem;margin:1.8em 0 .5em;padding-top:.6em;border-top:1px solid var(--line)}
+  p,li{margin:.35em 0}
+  .muted{color:var(--muted);font-size:.9rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
+  table{width:100%;border-collapse:collapse;font-size:.92rem}
+  th,td{text-align:left;vertical-align:top;padding:7px 6px;border-bottom:1px solid var(--line)}
+  th{font-weight:600}
+  .tag{display:inline-block;font-size:.75rem;font-weight:600;padding:1px 7px;border-radius:99px;color:#fff}
+  .have{background:var(--ok)} .build{background:var(--new)} .risk{background:var(--warn)}
+  .A{color:var(--a);font-weight:600} .B{color:var(--b);font-weight:600}
+  .dg{margin:10px 0}
+  .dg .row{display:flex;gap:8px;flex-wrap:wrap}
+  .dg .n{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;text-align:center}
+  .dg small{color:var(--muted)}
+  .dg .arrow{text-align:center;color:var(--muted);font-size:.85rem;margin:6px 0}
+  .dg .gwbox{border:2px solid var(--b);border-radius:10px;padding:10px}
+  .dg .gwt{text-align:center;font-weight:600;margin-bottom:8px}
+  ol.q li{margin:.6em 0}
+  code{font-size:.88em;background:var(--card);padding:0 4px;border-radius:4px}
+  .scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<main>
+<h1>hermes-mobile: same chats on every device</h1>
+<p class="muted">Approved plan · issues on GitHub · details in <code>PLAN.md</code> and <code>issues.md</code> (33 issues)</p>
+
+<h2>The goal</h2>
+<div class="card">
+<p>Use Hermes like Telegram: open the Android tablet and see the <b>same chats, group rooms and bot-to-bot threads</b> as on Desktop, live. Read something on one device and it's read everywhere. Pick up a conversation in the middle, even a room that is running right now. <b>Desktop doesn't need to be running.</b></p>
+<p>A milestone is done when the automated checks pass on the box and you've ticked a short checklist on your tablet (about 5 minutes).</p>
+</div>
+
+<h2>How it works</h2>
+<p>pavillion-claw holds everything. Desktop and the app are windows onto it.</p>
+<div class="dg" role="img" aria-label="Desktop and the Android app connect over HTTPS to hermes dashboard on pavillion-claw">
+  <div class="row"><div class="n">Desktop</div><div class="n">Android app<br><small>tablet</small></div></div>
+  <div class="arrow">↕ HTTPS only, over Tailscale ↕</div>
+  <div class="gwbox"><div class="gwt">pavillion-claw<br><small>hermes dashboard · pavillion-claw.tailfc1337.ts.net</small></div>
+    <div class="row">
+      <div class="n"><b>Chats</b><br><small>stored on the gateway ✓<br>read state ✓ · live ✓</small></div>
+      <div class="n"><b>Group rooms</b><br><small>run without Desktop ✓<br>live updates ✗ · read state ✗<br>→ we add these</small></div>
+      <div class="n"><b>Bot-to-bot</b><br><small>backend inbox ✓</small></div>
+    </div></div>
+</div>
+<p class="muted">Telegram (<code>hermes gateway</code>) runs on the same machine but stays separate.</p>
+
+<h2>What exists vs what we build</h2>
+<div class="scroll"><table>
+<tr><th>Piece</th><th>Today</th><th>Work</th></tr>
+<tr><td>App ID</td><td><code>com.nousresearch…</code></td><td>Change to <code>io.github.basilrari.hermesmobile</code>. You reinstall once.</td></tr>
+<tr><td>Connection</td><td>plain HTTP allowed</td><td>HTTPS only via tailscale serve</td></tr>
+<tr><td>Log in, Sessions and Bots</td><td><span class="tag have">exists</span> browser test only</td><td>Prove it on your tablet with a real reply</td></tr>
+<tr><td>Rooms run on the gateway</td><td><span class="tag have">exists</span></td><td>App only creates gateway rooms, so Desktop and app always match</td></tr>
+<tr><td>Bot-to-bot</td><td><span class="tag have">exists</span> (needs 2 setup markers)</td><td>Check setup, test with Desktop closed</td></tr>
+<tr><td>Live room updates</td><td><span class="tag build">missing</span> re-reads the whole room every 2 s</td><td>Gateway tells clients when a room changes; fetch only new messages (upstream PRs)</td></tr>
+<tr><td>Room read state</td><td><span class="tag build">missing</span></td><td>One read marker per room, shared by all devices (upstream PR)</td></tr>
+<tr><td>Sends survive the app being killed</td><td><span class="tag build">missing</span></td><td>Durable send journal in the app</td></tr>
+<tr><td>App wipes Desktop's relay list</td><td><span class="tag risk">likely bug</span></td><td>Turn the relay off in the app</td></tr>
+<tr><td>Tablet layout</td><td><span class="tag have">basic</span></td><td>Polish from your checklist notes</td></tr>
+</table></div>
+
+<h2>Order of work</h2>
+<p class="muted">No due dates. We start now and go as fast as the checks allow, one milestone after another. Until upstream merges, pavillion-claw runs our patched branch.</p>
+<div class="scroll"><table>
+<tr><th>Milestone</th><th>You'll be able to…</th></tr>
+<tr><td><b>M0</b> Baseline</td><td>Install the renamed app, log in over HTTPS, get a real reply</td></tr>
+<tr><td><b>M1</b> Gateway-only app</td><td>Use gateway rooms from the tablet; nothing important stored on it; recovers from network drops</td></tr>
+<tr><td><b>M2</b> Live + read state</td><td>See Desktop messages on the tablet within 2 s; read in one place, cleared everywhere</td></tr>
+<tr><td><b>M3</b> Continuity</td><td>Quit Desktop and carry on from the tablet mid-room; survives gateway restarts</td></tr>
+<tr><td><b>M4</b> Tablet polish</td><td>A tablet layout that's comfortable for daily use</td></tr>
+</table></div>
+
+<h2>Team and review</h2>
+<div class="card">
+<p><b>Hermes Mobile (lead):</b> splits the work, reviews every change hard, writes your checklists. Writes no code.</p>
+<p><span class="A">Eng A</span>: the app, Android, and the automated browser tests.</p>
+<p><span class="B">Eng B</span>: gateway changes, the patched branch, upstream PRs.</p>
+</div>
+<ol>
+<li><b>Contracts first:</b> new gateway calls are written down and approved before coding.</li>
+<li><b>Every PR:</b> one issue, tests, no secrets, lead review.</li>
+<li><b>Every milestone:</b> automated checks at phone and tablet sizes, then your 5-minute tablet checklist.</li>
+<li><b>Upstream PRs:</b> from <code>basilrari</code>, opened only after you approve the title and body.</li>
+<li><b>Real replies in tests:</b> DeepSeek Flash, capped at $5 a month.</li>
+</ol>
+
+<h2>Main risks</h2>
+<ul>
+<li><b>Upstream is slow to merge.</b> Patches stay small and switchable; the app still works without them by polling.</li>
+<li><b>Upstream changes daily.</b> We resync at the start of each milestone.</li>
+<li><b>Two room drivers</b> on pavillion-claw (dashboard and the Telegram gateway share one home). The doctor and a restart test check it.</li>
+<li><b>Android kills background apps.</b> Send journal and reconnect logic. With no push, nothing arrives while the app is closed; it catches up when you open it.</li>
+<li><b>Browser tests miss device bugs.</b> Your checklist covers those.</li>
+</ul>
+
+<h2>Your decisions</h2>
+<ol class="q">
+<li>You run a 5-minute tablet checklist per milestone; everything else is automated on the box. No phone testing, no adb.</li>
+<li>Patched gateway branch is fine; you approve each upstream PR.</li>
+<li>No push notifications.</li>
+<li>Read once, read everywhere.</li>
+<li>One machine (pavillion-claw); Telegram stays separate; no second gateway.</li>
+<li>No old rooms to migrate.</li>
+<li>Durable replay buffer stays optional.</li>
+<li>DeepSeek Flash, $5/month for tests.</li>
+<li>App ID <code>io.github.basilrari.hermesmobile</code>, one reinstall.</li>
+<li>HTTPS only via tailscale serve.</li>
+<li>Android only.</li>
+</ol>
+
+<h2>Not in this plan</h2>
+<p>iOS · push notifications · app stores and release signing · secrets in any commit · a second gateway · Telegram sync · fixing Desktop's relay · a new chat UI.</p>
+</main>
+</body>
+</html>

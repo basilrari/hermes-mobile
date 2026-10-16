@@ -1,0 +1,785 @@
+{
+  "repo": "basilrari/hermes-mobile",
+  "note": "Approved by Basil. No due dates: start now, finish as fast as possible. Titles carry stable IDs (HM-xx) so dependencies resolve before GitHub numbers exist.",
+  "labels": [
+    {
+      "name": "track:app",
+      "color": "1d76db",
+      "description": "Eng A: app, bridge, Android"
+    },
+    {
+      "name": "track:gateway",
+      "color": "5319e7",
+      "description": "Eng B: gateway and upstream PRs"
+    },
+    {
+      "name": "upstream-pr",
+      "color": "b60205",
+      "description": "Change lands in NousResearch/hermes-agent (Basil approves title and body first)"
+    },
+    {
+      "name": "type:feature",
+      "color": "a2eeef",
+      "description": "New capability"
+    },
+    {
+      "name": "type:bug",
+      "color": "d73a4a",
+      "description": "Something is wrong"
+    },
+    {
+      "name": "type:test",
+      "color": "c5def5",
+      "description": "Verification or test work"
+    },
+    {
+      "name": "type:docs",
+      "color": "0075ca",
+      "description": "Documentation"
+    },
+    {
+      "name": "type:chore",
+      "color": "cfd3d7",
+      "description": "Maintenance"
+    },
+    {
+      "name": "needs-device-verify",
+      "color": "fbca04",
+      "description": "Not done until Basil ticks the tablet checklist against his gateway"
+    },
+    {
+      "name": "review:gate",
+      "color": "000000",
+      "description": "Gate: lead (and Basil) must sign off"
+    },
+    {
+      "name": "stretch",
+      "color": "ededed",
+      "description": "Optional; only if the milestone is otherwise done"
+    },
+    {
+      "name": "priority:P0",
+      "color": "b60205",
+      "description": "Blocks the milestone"
+    },
+    {
+      "name": "priority:P1",
+      "color": "d93f0b",
+      "description": "Needed for the milestone"
+    },
+    {
+      "name": "priority:P2",
+      "color": "0e8a16",
+      "description": "Nice to have"
+    },
+    {
+      "name": "area:rooms",
+      "color": "bfdadc",
+      "description": "Gateway-hosted group rooms"
+    },
+    {
+      "name": "area:sessions",
+      "color": "bfdadc",
+      "description": "Single-bot sessions"
+    },
+    {
+      "name": "area:bots",
+      "color": "bfdadc",
+      "description": "Bot-to-bot messaging"
+    },
+    {
+      "name": "area:read-state",
+      "color": "bfdadc",
+      "description": "Read cursors and unread"
+    },
+    {
+      "name": "area:protocol",
+      "color": "bfdadc",
+      "description": "RPC contracts"
+    },
+    {
+      "name": "area:tablet",
+      "color": "bfdadc",
+      "description": "Tablet and phone-size layout"
+    },
+    {
+      "name": "area:security",
+      "color": "bfdadc",
+      "description": "Secrets, TLS"
+    },
+    {
+      "name": "area:setup",
+      "color": "bfdadc",
+      "description": "Gateway setup"
+    },
+    {
+      "name": "area:storage",
+      "color": "bfdadc",
+      "description": "Device-side storage"
+    },
+    {
+      "name": "area:renderer",
+      "color": "bfdadc",
+      "description": "Desktop renderer code"
+    },
+    {
+      "name": "area:diagnostics",
+      "color": "bfdadc",
+      "description": "Tracing and logs"
+    },
+    {
+      "name": "area:identity",
+      "color": "bfdadc",
+      "description": "App ID and naming"
+    },
+    {
+      "name": "area:testing",
+      "color": "bfdadc",
+      "description": "Test harness and checklists"
+    }
+  ],
+  "milestones": [
+    {
+      "title": "M0 · Baseline on device",
+      "description": "New app ID, HTTPS only, first real reply on the tablet, headless harness, gateway doctor, contracts frozen."
+    },
+    {
+      "title": "M1 · Gateway-only client",
+      "description": "App speaks gateway RPC only: relay off, gateway rooms only, durable send journal, resume; bot-to-bot via the backend inbox; patched gateway branch ready."
+    },
+    {
+      "title": "M2 · Live sync & read state",
+      "description": "groups.event, incremental logs, shared room read state; verified against the patched gateway."
+    },
+    {
+      "title": "M3 · Continuity verified (no Desktop)",
+      "description": "Continuity matrix passes with Desktop closed; restart/soak clean."
+    },
+    {
+      "title": "M4 · Tablet polish",
+      "description": "Tablet polish, phone-size check, quiet background behaviour, upstream follow-through."
+    }
+  ],
+  "issues": [
+    {
+      "id": "HM-01",
+      "title": "[HM-01] Change the app ID to io.github.basilrari.hermesmobile",
+      "body": "**ID:** HM-01 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device\n\n### Context\nThe app ID is `com.nousresearch.hermesagent.mobile`, which looks official. Basil chose `io.github.basilrari.hermesmobile`. Android treats a new ID as a new app, so this is done first and costs a **one-time reinstall** (uninstall the old APK, install the new one, log in again).\n\n### Tasks\n- [ ] Set `appId` in `capacitor.config.ts`; update `applicationId`/`namespace` in the Android Gradle files and move the Java/Kotlin package (`MainActivity`) to match.\n- [ ] Grep the repo for the old ID (README, docs, scripts, tests) and update every reference.\n- [ ] Keep the display name decision visible in the PR (name stays \"Hermes\" unless Basil says otherwise).\n- [ ] README: note the one-time reinstall and that old app data is not carried over.\n\n### Acceptance criteria\n- [ ] `apksigner`/`aapt dump badging` shows package `io.github.basilrari.hermesmobile`.\n- [ ] No occurrence of the old ID left in the repo.\n- [ ] Reinstall step written in README.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/capacitor.config.ts`\n- `apps/mobile/android/app/build.gradle`\n- `apps/mobile/android/app/src/main/java/** (package move)`\n- `README.md`\n\n### Dependencies\n- None\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:chore",
+        "area:identity",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [],
+      "github_number": 1
+    },
+    {
+      "id": "HM-02",
+      "title": "[HM-02] HTTPS only via tailscale serve (https://pavillion-claw.tailfc1337.ts.net); cleartext off",
+      "body": "**ID:** HM-02 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device\n\n### Context\nDecision: the gateway is reached only at `https://pavillion-claw.tailfc1337.ts.net` through `tailscale serve`. Today the app origin is `http://localhost` with cleartext allowed so `ws://` works (`capacitor.config.ts`, `network_security_config.xml`). LAN `http://` stops working; that is intended.\n\n### Tasks\n- [ ] Set `androidScheme: 'https'`; set `cleartextTrafficPermitted=\"false\"` in `network_security_config.xml` and remove any cleartext domain exceptions.\n- [ ] Reject `http://` and `ws://` gateway URLs in the connect screen with a clear message.\n- [ ] Confirm the WSS + `/api/auth/ws-ticket` flow against the ts.net URL.\n- [ ] Update README security notes.\n\n### Acceptance criteria\n- [ ] Login, chat and rooms work over HTTPS/WSS.\n- [ ] An `http://` URL is refused by the app and by Android policy (unit test for the URL check).\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/capacitor.config.ts`\n- `apps/mobile/android/app/src/main/res/xml/network_security_config.xml`\n- `apps/mobile/src/mobile/ (connect screen)`\n- `README.md`\n\n### Dependencies\n- HM-01 (new app ID)\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:security",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-01"
+      ],
+      "github_number": 2
+    },
+    {
+      "id": "HM-03",
+      "title": "[HM-03] Install the renamed debug APK on Basil's tablet and log in",
+      "body": "**ID:** HM-03 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device\n\n### Context\nv0.1.1 was only tested in headless Chrome and never on a physical device (`docs/VERIFICATION.md`). This is the first device run, with the new ID and HTTPS-only build.\n\n### Tasks\n- [ ] Build `app-debug.apk`; record versionName/versionCode and commit.\n- [ ] Write the M0 device checklist (≤ 5 minutes) for Basil: uninstall old app, install, connect to the ts.net URL, log in, relaunch keeps session, Sessions | Bots tabs in both orientations, Bots roster lists the 3 bots.\n- [ ] Record Basil's results in `docs/VERIFICATION.md`; file each defect as a new issue.\n\n### Acceptance criteria\n- [ ] Login works through the native HTTP path (CapacitorHttp).\n- [ ] Relaunch does not ask for the password again.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/src/bridge/auth.ts`\n- `apps/mobile/src/bridge/cookie-jar.ts`\n- `docs/VERIFICATION.md`\n- `docs/checklists/M0.md (new)`\n\n### Dependencies\n- HM-01\n- HM-02\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:test",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-01",
+        "HM-02"
+      ],
+      "github_number": 3
+    },
+    {
+      "id": "HM-04",
+      "title": "[HM-04] First real chat turn: a single-bot session streams an LLM reply",
+      "body": "**ID:** HM-04 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device\n\n### Context\nNo real reply has ever been tested (the test gateway had no inference provider). Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Tasks\n- [ ] Headless: send a prompt in a normal session and in a bot's `Bot Chat` at both viewport sizes; check streaming, tool calls, final message.\n- [ ] Headless: background the page (visibility hidden) for 30 s mid-stream; note whether it resumes (`session.events.since`) or refetches.\n- [ ] Device checklist item: Basil sends one prompt on the tablet and sees the same transcript on Desktop.\n\n### Acceptance criteria\n- [ ] Streamed reply renders fully in a session and a Bot Chat.\n- [ ] Behaviour after backgrounding written down.\n- [ ] Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/src/bridge/connection.ts`\n- `docs/VERIFICATION.md`\n\n### Dependencies\n- HM-03 (device bring-up)\n- HM-06 (harness)\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:test",
+        "area:sessions",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-03",
+        "HM-06"
+      ],
+      "github_number": 4
+    },
+    {
+      "id": "HM-05",
+      "title": "[HM-05] Debug-only RPC trace: log method names and timing, export from the app",
+      "body": "**ID:** HM-05 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device\n\n### Context\nWe need proof that the app speaks gateway RPC only, never calls `bot_relay.*`, and stops full-log polling after M2. The headless harness reads it directly; on the tablet Basil can share it from a hidden screen when a checklist item fails.\n\n### Tasks\n- [ ] Wrap the bridge's WS/REST send paths to record `{t, direction, method or path, ms, ok}`; never record params, bodies, cookies or tickets.\n- [ ] Ring buffer (last 2,000 entries); long-press on the version label to share as a text file; expose to the harness via a debug global.\n- [ ] Hide in non-debug builds.\n- [ ] Unit tests: no secret-looking fields can enter the record.\n\n### Acceptance criteria\n- [ ] A 10-minute trace can be exported.\n- [ ] A test proves params/headers are never stored.\n- [ ] Trace includes server-pushed event names (e.g. `sessions.changed`).\n\n### Files\n- `apps/mobile/src/bridge/http.ts`\n- `apps/mobile/src/bridge/connection.ts`\n- `apps/mobile/src/mobile/ (debug screen)`\n\n### Dependencies\n- None\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:diagnostics",
+        "priority:P1"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [],
+      "github_number": 5
+    },
+    {
+      "id": "HM-06",
+      "title": "[HM-06] Headless test harness on the box: phone and tablet viewports against pavillion-claw",
+      "body": "**ID:** HM-06 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device\n\n### Context\nAutomated checks run on the box, not on a device: the built bundle in headless Chrome at phone and tablet sizes against `https://pavillion-claw.tailfc1337.ts.net`, plus unit and gateway tests. The phone is not a test target. Basil runs a short manual checklist on the tablet per milestone. Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Tasks\n- [ ] Script (Playwright or Puppeteer) that serves the built bundle, logs in with the password from an env var, and runs scenario files.\n- [ ] Two viewport profiles: phone 412×915, tablet 1280×800 (portrait and landscape).\n- [ ] Support two concurrent clients (for sync tests later) and reading the RPC trace (HM-05).\n- [ ] `docs/checklists/` template: each milestone's tablet checklist must fit in about 5 minutes.\n- [ ] Turn counter: fail the run if it would exceed the per-run turn budget.\n\n### Acceptance criteria\n- [ ] `npm run e2e` passes login + Bots roster at both sizes.\n- [ ] No credential in output or artefacts.\n- [ ] Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Files\n- `scripts/e2e/ (new)`\n- `docs/checklists/ (new)`\n- `package.json`\n\n### Dependencies\n- HM-02 (HTTPS build)\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:test",
+        "area:testing",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-02"
+      ],
+      "github_number": 6
+    },
+    {
+      "id": "HM-07",
+      "title": "[HM-07] Secrets guard: gitleaks pre-commit and CI, ignore rules for keystores",
+      "body": "**ID:** HM-07 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M0 · Baseline on device\n\n### Context\nSecrets must never land in a commit: gateway password, DeepSeek key, keystores.\n\n### Tasks\n- [ ] Add gitleaks config + pre-commit instructions; a CI job (no secrets needed) running gitleaks, `npm test`, `npm run typecheck`.\n- [ ] `.gitignore`: `*.jks`, `*.keystore`, `.env*`, `local.properties`, `release/*.apk` policy.\n- [ ] Scan current history once and report (do not rewrite history without Basil).\n\n### Acceptance criteria\n- [ ] CI fails on a planted fake secret in a test branch.\n- [ ] History scan result recorded in the PR.\n\n### Files\n- `.github/workflows/ci.yml (new)`\n- `.gitleaks.toml (new)`\n- `.gitignore`\n\n### Dependencies\n- None\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:chore",
+        "area:security",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [],
+      "github_number": 7
+    },
+    {
+      "id": "HM-08",
+      "title": "[HM-08] Read-only gateway doctor for pavillion-claw",
+      "body": "**ID:** HM-08 · **Track:** Eng B (gateway/upstream) · **Milestone:** M0 · Baseline on device\n\n### Context\npavillion-claw runs both `hermes gateway` (Telegram) and `hermes dashboard` on one home. Continuity needs the hosted room driver, headless Bot Mode markers, and one healthy driver on `shared-state.db`.\n\n### Tasks\n- [ ] Script under `scripts/gateway-doctor/` (runs on pavillion-claw; reads `~/.hermes`, calls RPC with a password from an env var, never writes).\n- [ ] Checks: `/api/status`; `groups.capabilities` (`driver`, `protocol_version`, `features`); a `Bot Chat` session for each of the 3 bots; a `profile.yaml` with `ui_meta.hermes-bots`; both processes present and which one holds the room driver authority epoch; tailscale serve URL answers over HTTPS.\n- [ ] Pass/warn/fail table; non-zero exit on fail.\n\n### Acceptance criteria\n- [ ] Report from pavillion-claw attached to M0 evidence.\n- [ ] Provably no writes (read-only DB opens).\n- [ ] No credential in output.\n\n### Files\n- `scripts/gateway-doctor/ (new)`\n- `Reads: ~/.hermes/profiles/*/profile.yaml, ~/.hermes/config.yaml, <profile>/state.db (read-only)`\n\n### Dependencies\n- None\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "type:feature",
+        "area:setup",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [],
+      "github_number": 8
+    },
+    {
+      "id": "HM-09",
+      "title": "[HM-09] Gateway setup guide for pavillion-claw",
+      "body": "**ID:** HM-09 · **Track:** Eng B (gateway/upstream) · **Milestone:** M0 · Baseline on device\n\n### Context\nOne machine runs `hermes gateway` and `hermes dashboard`. Telegram is separate and does not sync with Desktop or the app. `bot-mode.md` (~L198–222): `message_agent` needs a `Bot Chat` session and `ui_meta: { hermes-bots: {} }`, and no CLI writes the latter.\n\n### Tasks\n- [ ] Write `docs/GATEWAY_SETUP.md`: `tailscale serve` for `https://pavillion-claw.tailfc1337.ts.net`, password login, markers (exact commands/YAML), driver check, the two-process layout and what each owns.\n- [ ] Link the doctor (HM-08) and the patched-branch runbook (HM-18).\n\n### Acceptance criteria\n- [ ] Basil can follow it without questions (lead dry-reads it).\n- [ ] Every command cites its upstream source.\n\n### Files\n- `docs/GATEWAY_SETUP.md (new)`\n\n### Dependencies\n- HM-08 (doctor)\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "type:docs",
+        "area:setup",
+        "priority:P1"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-08"
+      ],
+      "github_number": 9
+    },
+    {
+      "id": "HM-10",
+      "title": "[HM-10] Write and freeze the protocol contracts (gate G0)",
+      "body": "**ID:** HM-10 · **Track:** Eng B (gateway/upstream) · **Milestone:** M0 · Baseline on device\n\n### Context\nBoth tracks need fixed interfaces before M2 code: `groups.event`, `groups.read` (read anywhere = read everywhere), device identity and per-device resume cursors, bridge additions. Feature flags in `groups.capabilities.features` keep the app working on a stock gateway.\n\n### Tasks\n- [ ] Write `planning/contracts/`: `groups-event.md`, `read-cursors.md`, `device-identity.md`, `bridge-additions.md`.\n- [ ] For each: wire shape, errors, feature flag, ordering/duplication rules, restart behaviour (epoch), and the dashboard-vs-gateway process note.\n- [ ] Ground each in existing code: `_broadcast_global_event`, `change_watcher.py`, `hosted_rooms.append_event/read_events`, `sessions.last_read_at`.\n- [ ] Lead approval; summarise in `overview.html`.\n\n### Acceptance criteria\n- [ ] Lead signs off (G0) before HM-19/21/22/25 start.\n- [ ] Every new method/field is feature-detectable.\n\n### Files\n- `planning/contracts/*.md (new)`\n\n### Dependencies\n- None\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "type:docs",
+        "area:protocol",
+        "review:gate",
+        "priority:P0"
+      ],
+      "milestone": "M0 · Baseline on device",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [],
+      "github_number": 10
+    },
+    {
+      "id": "HM-11",
+      "title": "[HM-11] Stop the Desktop bot relay from running inside the mobile app",
+      "body": "**ID:** HM-11 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M1 · Gateway-only client\n\n### Context\n`plugin.tsx` calls `startBotRelay()` on register; with one connection `relay.ts` (~L424) sends `bot_relay.roster.sync { agents: [] }`, and `write_remote_roster` replaces `roster.json` wholesale (#115161). Option D doesn't use the relay.\n\n### Tasks\n- [ ] Confirm with the trace (HM-05) and a gateway log.\n- [ ] Disable on mobile without editing `apps/desktop/**`: Vite alias shim exporting no-op `startBotRelay/stopBotRelay`, via HM-16.\n- [ ] Unit test: plugin register path never calls `bot_relay.*`.\n\n### Acceptance criteria\n- [ ] Harness trace over 10 minutes shows zero `bot_relay.*` calls.\n- [ ] `~/.hermes/bot_relay/roster.json` unchanged after app launch while Desktop runs.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n\n### Files\n- `apps/mobile/vite.config.ts`\n- `apps/mobile/src/overrides/relay.ts (new)`\n\n### Dependencies\n- HM-05 (trace)\n- HM-16 (override mechanism)\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:bug",
+        "area:rooms",
+        "priority:P0"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-05",
+        "HM-16"
+      ],
+      "github_number": 11
+    },
+    {
+      "id": "HM-12",
+      "title": "[HM-12] Implement `preparedSubmissions` in the bridge so pending sends survive app kills",
+      "body": "**ID:** HM-12 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M1 · Gateway-only client\n\n### Context\n`canonical-group-send.ts` and the session prompt path use `window.hermesDesktop.preparedSubmissions {read, compareAndSet}` when present, else `localStorage`. Android kills background WebViews often.\n\n### Tasks\n- [ ] `read()` and atomic `compareAndSet` backed by Capacitor Preferences (or write-then-rename); serialise calls.\n- [ ] Match the Electron contract in `apps/desktop/electron/preload.ts` exactly.\n- [ ] Unit tests: CAS conflict, absent key, concurrent calls, corrupt store recovery.\n- [ ] Headless: reload the page mid-send. Tablet checklist item: force-stop during a room send, reopen.\n\n### Acceptance criteria\n- [ ] The message is re-sent with the same `event_id` and appears exactly once.\n- [ ] No journal text in `localStorage`.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/src/bridge/prepared-submissions.ts (new)`\n- `apps/mobile/src/bridge/install-bridge.ts`\n\n### Dependencies\n- HM-16 (resync first)\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:rooms",
+        "area:sessions",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-16"
+      ],
+      "github_number": 12
+    },
+    {
+      "id": "HM-13",
+      "title": "[HM-13] Inventory renderer-local storage on mobile; keep only UI prefs on the device",
+      "body": "**ID:** HM-13 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M1 · Gateway-only client\n\n### Context\nOption D: no conversation state on the device. The renderer still writes several keys (local room map in `group-chat.ts`, bot sections, caches).\n\n### Tasks\n- [ ] In the harness, dump every `localStorage`/IndexedDB key written in a 20-minute scripted session.\n- [ ] Classify: UI preference (OK), rebuildable cache (OK, documented), conversation state (fix in HM-12/HM-14 or new issue).\n- [ ] Table in `docs/ARCHITECTURE.md`; rule in the PR checklist; review `stubs.ts`.\n\n### Acceptance criteria\n- [ ] Table merged; every 'not OK' key has a fix or issue.\n- [ ] Lead agrees.\n\n### Files\n- `docs/ARCHITECTURE.md`\n- `apps/mobile/src/bridge/stubs.ts`\n\n### Dependencies\n- HM-05\n- HM-06\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:chore",
+        "area:storage",
+        "priority:P1"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-05",
+        "HM-06"
+      ],
+      "github_number": 13
+    },
+    {
+      "id": "HM-14",
+      "title": "[HM-14] Gateway rooms only: remove the device-local room create path on mobile",
+      "body": "**ID:** HM-14 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M1 · Gateway-only client\n\n### Context\nBasil has 3 bots and no existing rooms, so there is nothing to migrate. The goal is that every room is a gateway room, fully synced between Desktop and the app. `groupExecutionMode` is `canonical` only when `groups.capabilities.driver === true`; otherwise the renderer would create device-only rooms.\n\n### Tasks\n- [ ] Smallest override point (plugin decision or alias shim, HM-16) so mobile lists and creates only canonical rooms.\n- [ ] When the gateway reports `legacy`/`unavailable`, show a message pointing to `docs/GATEWAY_SETUP.md` instead.\n- [ ] If a renderer change is needed, hand it to Eng B as an upstream issue.\n\n### Acceptance criteria\n- [ ] A room created in the app is visible on Desktop, and vice versa (harness + Desktop).\n- [ ] No room data written on the device (HM-13 check).\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n\n### Files\n- `apps/mobile/src/overrides/ (new)`\n- `apps/desktop/src/plugins/hermes-bots/canonical-group-capabilities.ts (read only)`\n\n### Dependencies\n- HM-13\n- HM-16\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:rooms",
+        "priority:P0"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-13",
+        "HM-16"
+      ],
+      "github_number": 14
+    },
+    {
+      "id": "HM-15",
+      "title": "[HM-15] Resume and reconnect: app lifecycle, network changes, replay epoch",
+      "body": "**ID:** HM-15 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M1 · Gateway-only client\n\n### Context\nThe gateway gives `session.events.since` (`epoch`, `truncated`, `open_requests`) and `groups.log since_seq`. Tickets from `/api/auth/ws-ticket` are short-lived.\n\n### Tasks\n- [ ] On `App` resume and `Network` change: fresh ws-ticket, reconnect, replay; epoch reset → refetch.\n- [ ] Open rooms refetch from their last seq.\n- [ ] Bridge tests for ticket refresh and backoff.\n- [ ] Headless: drop the network 60 s (CDP offline) and hide the page 10 min. Tablet checklist: airplane mode 60 s, Tailscale off/on, 10 min backgrounded.\n\n### Acceptance criteria\n- [ ] Recovers without re-login and shows everything that happened meanwhile.\n- [ ] No duplicate messages.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/src/bridge/connection.ts`\n- `apps/mobile/src/bridge/auth.ts`\n- `apps/mobile/src/mobile/`\n\n### Dependencies\n- HM-04\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:sessions",
+        "area:rooms",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-04"
+      ],
+      "github_number": 15
+    },
+    {
+      "id": "HM-16",
+      "title": "[HM-16] Resync the renderer to upstream main and add an override/carry-patch mechanism",
+      "body": "**ID:** HM-16 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M1 · Gateway-only client\n\n### Context\nThe renderer is pinned at `7bda2a33`; upstream main is 167+ commits ahead. We need one documented place for mobile-only shims and for carrying Eng B's patches until they merge.\n\n### Tasks\n- [ ] Resync `apps/desktop` + `apps/shared` + lockfile to a chosen SHA; rerun tests, typecheck, harness, APK build.\n- [ ] `apps/mobile/src/overrides/` + table in `docs/ARCHITECTURE.md` (what, why, removal condition).\n- [ ] `patches/upstream/*.patch` applied by a script, each linked to its upstream PR; CI fails if one no longer applies.\n- [ ] Resync cadence: start of each milestone and after Eng B PRs merge.\n\n### Acceptance criteria\n- [ ] Builds and passes tests on the new SHA.\n- [ ] Override and carry-patch tables exist.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n\n### Files\n- `apps/desktop/**, apps/shared/** (resync only)`\n- `apps/mobile/vite.config.ts`\n- `apps/mobile/src/overrides/ (new)`\n- `patches/upstream/ (new)`\n- `docs/ARCHITECTURE.md`\n\n### Dependencies\n- None\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:chore",
+        "area:renderer",
+        "priority:P0"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [],
+      "github_number": 16
+    },
+    {
+      "id": "HM-17",
+      "title": "[HM-17] Verify bot-to-bot through the backend inbox with no Desktop running",
+      "body": "**ID:** HM-17 · **Track:** Eng B (gateway/upstream) · **Milestone:** M1 · Gateway-only client\n\n### Context\nAll bot-to-bot traffic goes through the backend inbox on the one gateway: durable delivery under `<profile>/runtime/bot_live_delivery/` (`tools/bot_live_delivery.py`, admission in `gateway/session_bot.py`). There is no second machine and no relay. Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Tasks\n- [ ] With Desktop quit, ask bot A (in its Bot Chat, via the harness) to message bot B.\n- [ ] Check the receipt reaches `settled`, the reply returns to A, and both Bot Chats show it in the app.\n- [ ] Repeat with B busy and with B's provider failing (typed `reason`).\n- [ ] Short runbook of observed states.\n\n### Acceptance criteria\n- [ ] Three scenarios documented with receipt states.\n- [ ] No Desktop process during the test (process list attached).\n- [ ] Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Files\n- `docs/GATEWAY_SETUP.md (runbook section)`\n\n### Dependencies\n- HM-09\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "type:test",
+        "area:bots",
+        "priority:P0"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-09"
+      ],
+      "github_number": 17
+    },
+    {
+      "id": "HM-18",
+      "title": "[HM-18] Patched hermes-agent branch on pavillion-claw: deploy, rollback, upstream PR flow",
+      "body": "**ID:** HM-18 · **Track:** Eng B (gateway/upstream) · **Milestone:** M1 · Gateway-only client\n\n### Context\nBasil approved running a patched hermes-agent branch on his gateway until upstream merges. Upstream PRs go to NousResearch/hermes-agent from the `basilrari` account, and Basil approves each PR's title and body first (G3).\n\n### Tasks\n- [ ] Branch on Basil's fork, rebased on a pinned upstream SHA; each patch maps to one upstream PR.\n- [ ] Runbook: install the branch on pavillion-claw, restart both processes, run the doctor, roll back to stock in one command.\n- [ ] PR draft template (title, body, tests) saved in `planning/upstream-prs/` for Basil's approval; nothing opened without it.\n\n### Acceptance criteria\n- [ ] Rollback tested once (stock → patched → stock) with doctor green each time.\n- [ ] Template in place.\n\n### Files\n- `docs/GATEWAY_SETUP.md`\n- `planning/upstream-prs/ (new)`\n\n### Dependencies\n- HM-08\n- HM-09\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "type:chore",
+        "area:setup",
+        "priority:P0"
+      ],
+      "milestone": "M1 · Gateway-only client",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-08",
+        "HM-09"
+      ],
+      "github_number": 18
+    },
+    {
+      "id": "HM-19",
+      "title": "[HM-19] Upstream PR: `groups.event` push for hosted rooms",
+      "body": "**ID:** HM-19 · **Track:** Eng B (gateway/upstream) · **Milestone:** M2 · Live sync & read state\n\n### Context\nClients poll rooms every 2 s. Rooms already have a durable per-room `seq`. Add a push hint so clients fetch deltas only. Refs #95163.\n\n### Tasks\n- [ ] Per HM-10: frame `groups.event {room_id, latest_seq, kind, epoch}` via `_broadcast_global_event`.\n- [ ] Cross-process safe (rooms may be appended by `hermes gateway` while `hermes dashboard` serves the WS): `change_watcher`-style signature on the hosted-room DB; coalesce bursts.\n- [ ] Advertise `event_push`.\n- [ ] Tests next to `test_groups_methods.py` / `test_change_watcher.py`: emit, coalesce, no-op, restart.\n- [ ] Draft PR title/body for Basil (G3); carry the patch on the HM-18 branch meanwhile.\n\n### Acceptance criteria\n- [ ] New tests pass.\n- [ ] A second WS client gets `groups.event` within 1 s of an append.\n- [ ] PR opened only after G3.\n\n### Files\n- `tui_gateway/methods_groups.py`\n- `tui_gateway/change_watcher.py`\n- `tui_gateway/server.py (use only)`\n- `tests/tui_gateway/`\n\n### Dependencies\n- HM-10 (G0)\n- HM-18 (branch)\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "upstream-pr",
+        "type:feature",
+        "area:rooms",
+        "area:protocol",
+        "priority:P0"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-10",
+        "HM-18"
+      ],
+      "github_number": 19
+    },
+    {
+      "id": "HM-20",
+      "title": "[HM-20] Upstream PR: renderer uses `groups.event` and incremental `groups.log`",
+      "body": "**ID:** HM-20 · **Track:** Eng B (gateway/upstream) · **Milestone:** M2 · Live sync & read state\n\n### Context\n`canonical-group-workspace.tsx` `refresh()` re-reads the whole log from `since_seq: 0` every 2 s. Desktop and the app share this client.\n\n### Tasks\n- [ ] Keep the loaded log; fetch only `since_seq = last seq`; reset on epoch change.\n- [ ] Subscribe to `groups.event` when advertised; slower polling otherwise [decide in review].\n- [ ] Vitest next to the canonical-group tests.\n\n### Acceptance criteria\n- [ ] With `event_push`, no periodic full-log reads (trace).\n- [ ] Without it, behaviour equals today's.\n\n### Files\n- `apps/desktop/src/plugins/hermes-bots/canonical-group-workspace.tsx`\n- `apps/desktop/src/plugins/hermes-bots/canonical-groups.ts`\n\n### Dependencies\n- HM-19\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "upstream-pr",
+        "type:feature",
+        "area:rooms",
+        "area:renderer",
+        "priority:P0"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-19"
+      ],
+      "github_number": 20
+    },
+    {
+      "id": "HM-21",
+      "title": "[HM-21] Upstream PR: room read cursors (`groups.read`, `read_seq`, `unread_count`)",
+      "body": "**ID:** HM-21 · **Track:** Eng B (gateway/upstream) · **Milestone:** M2 · Live sync & read state\n\n### Context\nRooms have no read state. Decision: read on one device means read everywhere, so one user-level watermark per room (like sessions' `last_read_at`). Refs #95163, #126725.\n\n### Tasks\n- [ ] Per HM-10: watermark table in `shared-state.db`; `groups.read {room_id, seq, device_id?}`; `read_seq` + `unread_count` in `groups.list`/`groups.state`.\n- [ ] Monotonic, idempotent, migration in the hosted-rooms style.\n- [ ] Emit `groups.event {kind: \"read\"}`; feature `read_cursors`.\n- [ ] Tests incl. restart.\n\n### Acceptance criteria\n- [ ] Unread counts correct across restart.\n- [ ] Older clients unaffected.\n- [ ] PR opened only after G3.\n\n### Files\n- `gateway/hosted_rooms.py`\n- `tui_gateway/methods_groups.py`\n- `tests/`\n\n### Dependencies\n- HM-10\n- HM-19\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "upstream-pr",
+        "type:feature",
+        "area:rooms",
+        "area:read-state",
+        "priority:P0"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-10",
+        "HM-19"
+      ],
+      "github_number": 21
+    },
+    {
+      "id": "HM-22",
+      "title": "[HM-22] Upstream PR: per-device resume cursors",
+      "body": "**ID:** HM-22 · **Track:** Eng B (gateway/upstream) · **Milestone:** M2 · Live sync & read state\n\n### Context\nRead state is global (HM-21). Per-device state is only for \"reopen where this device was\". Low priority; drop if upstream review pushes back.\n\n### Tasks\n- [ ] Per HM-10: `{device_id, label, last_seen_at}` and per-conversation `last_seen_seq`/`last_seen_at`; TTL for stale devices; feature `device_cursors`.\n- [ ] No hardware IDs or IPs.\n- [ ] Tests.\n\n### Acceptance criteria\n- [ ] Resume position survives restart in tests.\n\n### Files\n- (new module beside gateway/hosted_rooms.py, per upstream review)\n- `tests/`\n\n### Dependencies\n- HM-21\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "upstream-pr",
+        "type:feature",
+        "area:read-state",
+        "priority:P2"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-21"
+      ],
+      "github_number": 22
+    },
+    {
+      "id": "HM-23",
+      "title": "[HM-23] Upstream PR: renderer unread badges and mark-read for gateway rooms",
+      "body": "**ID:** HM-23 · **Track:** Eng B (gateway/upstream) · **Milestone:** M2 · Live sync & read state\n\n### Context\nRenderer side of HM-21/22: unread counts on rooms, `groups.read` when visible at the bottom, resume at the device cursor if available.\n\n### Tasks\n- [ ] Badges; mark-read on visibility + bottom; update on `groups.event {kind: read}`.\n- [ ] Device id from optional `window.hermesDesktop.deviceIdentity()`, else renderer-generated.\n- [ ] Feature-detect; vitest.\n\n### Acceptance criteria\n- [ ] Badges clear across two clients in tests.\n- [ ] No change on gateways without the features.\n\n### Files\n- `apps/desktop/src/plugins/hermes-bots/roster-pane.tsx`\n- `apps/desktop/src/plugins/hermes-bots/canonical-group-workspace.tsx`\n\n### Dependencies\n- HM-20\n- HM-21\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "upstream-pr",
+        "type:feature",
+        "area:renderer",
+        "area:read-state",
+        "priority:P1"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-20",
+        "HM-21"
+      ],
+      "github_number": 23
+    },
+    {
+      "id": "HM-24",
+      "title": "[HM-24] Upstream PR (stretch): durable session replay buffer",
+      "body": "**ID:** HM-24 · **Track:** Eng B (gateway/upstream) · **Milestone:** M2 · Live sync & read state\n\n### Context\nStays a stretch goal. `tui_gateway/event_replay.py` is in memory and changes `epoch` on restart; history still comes from `state.db`. Only helps in-flight streams across a restart. Start only if M2 is otherwise done.\n\n### Tasks\n- [ ] Design note: bounded on-disk ring, stable epoch.\n- [ ] Implement + restart tests.\n- [ ] Measure write overhead.\n\n### Acceptance criteria\n- [ ] Reconnect after restart replays missed frames in tests.\n- [ ] Overhead acceptable to lead.\n\n### Files\n- `tui_gateway/event_replay.py`\n- `tests/tui_gateway/`\n\n### Dependencies\n- HM-10\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "upstream-pr",
+        "type:feature",
+        "area:sessions",
+        "stretch",
+        "priority:P2"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-10"
+      ],
+      "github_number": 24
+    },
+    {
+      "id": "HM-25",
+      "title": "[HM-25] Device identity in the bridge (`deviceIdentity()`)",
+      "body": "**ID:** HM-25 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M2 · Live sync & read state\n\n### Context\nResume cursors (HM-22) need a stable, non-secret device id and label.\n\n### Tasks\n- [ ] Random UUID on first launch in Preferences; label defaults to device model, editable.\n- [ ] Expose `window.hermesDesktop.deviceIdentity()` per HM-10.\n- [ ] Unit tests.\n\n### Acceptance criteria\n- [ ] Same id across relaunches; new id after data clear.\n- [ ] No hardware identifiers.\n\n### Files\n- `apps/mobile/src/bridge/device-identity.ts (new)`\n- `apps/mobile/src/bridge/install-bridge.ts`\n\n### Dependencies\n- HM-10\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:read-state",
+        "priority:P2"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-10"
+      ],
+      "github_number": 25
+    },
+    {
+      "id": "HM-26",
+      "title": "[HM-26] Integrate live sync and read state in the app",
+      "body": "**ID:** HM-26 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M2 · Live sync & read state\n\n### Context\nBrings HM-19..23 into the app via carried patches (HM-16), against pavillion-claw running the HM-18 branch. Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Tasks\n- [ ] Apply carried patches; confirm feature detection on patched and stock gateways.\n- [ ] Harness, two clients (phone + tablet size) and Desktop on one room: 20 messages each way, latency from trace timestamps.\n- [ ] Read on one client → badge clears on the others; restart gateway → counts intact.\n- [ ] Tablet checklist: send from Desktop, see it on the tablet; read on the tablet, Desktop clears.\n\n### Acceptance criteria\n- [ ] p95 ≤ 2 s over 20 messages; no 2 s full-log polling.\n- [ ] Stock gateway still works by polling.\n- [ ] Read state syncs within 3 s.\n- [ ] Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `patches/upstream/`\n- `apps/mobile/src/overrides/`\n- `docs/VERIFICATION.md`\n\n### Dependencies\n- HM-16\n- HM-20\n- HM-23\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:rooms",
+        "area:read-state",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M2 · Live sync & read state",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-16",
+        "HM-20",
+        "HM-23"
+      ],
+      "github_number": 26
+    },
+    {
+      "id": "HM-27",
+      "title": "[HM-27] Continuity matrix with Desktop closed",
+      "body": "**ID:** HM-27 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M3 · Continuity verified (no Desktop)\n\n### Context\nThe goal in one test: same chats, rooms and bot-to-bot threads on Desktop and the app, shared read state, pick up mid-conversation, no Desktop required. Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Tasks\n- [ ] Harness: {Desktop, app at tablet size, app at phone size} × {single-bot chat, room, bot-to-bot thread} × {send, read, resume mid-stream, resume after reload, resume after gateway restart}.\n- [ ] Include: room started on Desktop, Desktop quit, app joins mid-round and sends.\n- [ ] Tablet checklist (5 min): the Desktop-quit room scenario and one force-stop resume.\n- [ ] Pass/fail per cell; file bugs; rerun until green or waived by Basil.\n\n### Acceptance criteria\n- [ ] Every cell passes or has a Basil-approved waiver.\n- [ ] Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `docs/VERIFICATION.md`\n- `scripts/e2e/scenarios/`\n\n### Dependencies\n- HM-26\n- HM-17\n- HM-15\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:test",
+        "needs-device-verify",
+        "priority:P0"
+      ],
+      "milestone": "M3 · Continuity verified (no Desktop)",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-26",
+        "HM-17",
+        "HM-15"
+      ],
+      "github_number": 27
+    },
+    {
+      "id": "HM-28",
+      "title": "[HM-28] Gateway restart and 1-hour soak on pavillion-claw (two processes, one home)",
+      "body": "**ID:** HM-28 · **Track:** Eng B (gateway/upstream) · **Milestone:** M3 · Continuity verified (no Desktop)\n\n### Context\n`hermes gateway` and `hermes dashboard` both run on pavillion-claw and may both start a room driver on `shared-state.db` (R4). Constraint: real LLM turns use DeepSeek Flash only, within the $5/month test spend cap; keep prompts short and record the turns used.\n\n### Tasks\n- [ ] 1-hour 3-bot room, no clients attached; restart each process once mid-round.\n- [ ] Check `groups.log` seq gap-free with no duplicate user events; check which process holds the authority epoch.\n- [ ] Report CPU/RAM, DB growth and turns/spend used.\n\n### Acceptance criteria\n- [ ] Seq continuity output attached; no duplicates.\n- [ ] Spend within the cap.\n- [ ] Upstream bug drafted if found (G3 before filing).\n\n### Files\n- `scripts/soak/ (new)`\n- `docs/VERIFICATION.md`\n\n### Dependencies\n- HM-19\n- HM-21\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "type:test",
+        "area:rooms",
+        "priority:P1"
+      ],
+      "milestone": "M3 · Continuity verified (no Desktop)",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-19",
+        "HM-21"
+      ],
+      "github_number": 28
+    },
+    {
+      "id": "HM-29",
+      "title": "[HM-29] Update ARCHITECTURE.md and VERIFICATION.md for Option D",
+      "body": "**ID:** HM-29 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M3 · Continuity verified (no Desktop)\n\n### Context\nDocs still describe a thin client of the Desktop renderer.\n\n### Tasks\n- [ ] Architecture diagram and data flows (sessions, rooms, bot inbox, one gateway).\n- [ ] VERIFICATION.md: harness results and Basil's tablet checklists per milestone.\n- [ ] README: Android only, new app ID, HTTPS only.\n\n### Acceptance criteria\n- [ ] Lead review passes; docs match the plan.\n\n### Files\n- `docs/ARCHITECTURE.md`\n- `docs/VERIFICATION.md`\n- `README.md`\n\n### Dependencies\n- HM-27\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:docs",
+        "priority:P2"
+      ],
+      "milestone": "M3 · Continuity verified (no Desktop)",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-27"
+      ],
+      "github_number": 29
+    },
+    {
+      "id": "HM-30",
+      "title": "[HM-30] Tablet layout polish",
+      "body": "**ID:** HM-30 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M4 · Tablet polish\n\n### Context\nPolish for daily use on Basil's tablet; the list comes from M0–M3 checklist notes.\n\n### Tasks\n- [ ] Agree a short list with lead (e.g. room member pane, composer above keyboard in landscape, rotation mid-compose, multi-window, touch targets).\n- [ ] Fix in `apps/mobile/src/mobile` CSS/behaviour, or upstream issues for generic renderer problems.\n- [ ] Harness screenshots at tablet size in both orientations for each item.\n\n### Acceptance criteria\n- [ ] Every item passes in the harness.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/src/mobile/`\n- `apps/mobile/src/styles.css`\n\n### Dependencies\n- HM-27\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:tablet",
+        "needs-device-verify",
+        "priority:P1"
+      ],
+      "milestone": "M4 · Tablet polish",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-27"
+      ],
+      "github_number": 30
+    },
+    {
+      "id": "HM-31",
+      "title": "[HM-31] Phone-size layout pass in the harness",
+      "body": "**ID:** HM-31 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M4 · Tablet polish\n\n### Context\nThe phone is not a test target, but the app should not break at phone width (<640 px edge overlay sidebar). Checked in headless Chrome only.\n\n### Tasks\n- [ ] Check room view, member list, attachments and composer at 412×915; fix the top problems.\n\n### Acceptance criteria\n- [ ] Agreed list passes in the harness at phone size.\n\n### Files\n- `apps/mobile/src/mobile/`\n\n### Dependencies\n- HM-30\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:feature",
+        "area:tablet",
+        "priority:P2"
+      ],
+      "milestone": "M4 · Tablet polish",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-30"
+      ],
+      "github_number": 31
+    },
+    {
+      "id": "HM-32",
+      "title": "[HM-32] Background behaviour: close the socket and stop polling when backgrounded",
+      "body": "**ID:** HM-32 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M4 · Tablet polish\n\n### Context\nNo push notifications, so the app has no reason to work in the background. It should close the WS and stop polling, then catch up on resume (HM-15).\n\n### Tasks\n- [ ] Close WS and stop timers on `App` pause; reconnect on resume.\n- [ ] Harness: hidden page makes no requests for 10 min (trace).\n- [ ] Tablet checklist: leave the app backgrounded overnight; Android battery screen shows it near zero.\n\n### Acceptance criteria\n- [ ] No requests while hidden (trace).\n- [ ] Catch-up on resume is complete.\n- [ ] Automated check passes on the box: built bundle in headless Chrome at phone (412×915) and tablet (1280×800) sizes against https://pavillion-claw.tailfc1337.ts.net.\n- [ ] Basil ticks the milestone's device checklist on his Android tablet against pavillion-claw (about 5 minutes; screenshots where the checklist asks). No adb, no bot driving the device.\n\n### Files\n- `apps/mobile/src/bridge/connection.ts`\n\n### Dependencies\n- HM-15\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:app",
+        "type:test",
+        "area:sessions",
+        "needs-device-verify",
+        "priority:P1"
+      ],
+      "milestone": "M4 · Tablet polish",
+      "track": "Eng A (app/bridge/Android)",
+      "assignee_role": "eng-a",
+      "depends_on": [
+        "HM-15"
+      ],
+      "github_number": 32
+    },
+    {
+      "id": "HM-33",
+      "title": "[HM-33] Upstream follow-through: review responses and patch rebase",
+      "body": "**ID:** HM-33 · **Track:** Eng B (gateway/upstream) · **Milestone:** M4 · Tablet polish\n\n### Context\nUpstream merges are not ours to control. Keep the open PRs current and shrink the carried patches as they merge.\n\n### Tasks\n- [ ] Answer review comments (replies drafted for Basil's OK where they change scope).\n- [ ] Rebase the HM-18 branch on current upstream; drop merged patches; rerun gateway tests and the harness.\n- [ ] Update the carry-patch table (HM-16).\n\n### Acceptance criteria\n- [ ] Branch rebased and doctor green.\n- [ ] Carry-patch table matches reality.\n\n### Files\n- `planning/upstream-prs/`\n- `patches/upstream/`\n\n### Dependencies\n- HM-18\n- HM-19\n- HM-21\n\n### Review\n- Lead adversarial review (G1): one issue per PR, tests, no secrets, failure modes stated.",
+      "labels": [
+        "track:gateway",
+        "upstream-pr",
+        "type:chore",
+        "priority:P1"
+      ],
+      "milestone": "M4 · Tablet polish",
+      "track": "Eng B (gateway/upstream)",
+      "assignee_role": "eng-b",
+      "depends_on": [
+        "HM-18",
+        "HM-19",
+        "HM-21"
+      ],
+      "github_number": 33
+    }
+  ]
+}
