@@ -16,6 +16,7 @@ import {
   getProfileRoutes,
 } from './connection'
 import { api } from './http'
+import { deviceIdentity } from './device-identity'
 import { notify, onPowerResume, openExternal, writeClipboard } from './native'
 import { preparedSubmissions } from './prepared-submissions'
 import { makeStubs } from './stubs'
@@ -45,6 +46,8 @@ export function installBridge(): void {
     // Durable send journal (HM-12): pending sends survive an app kill. Electron
     // contract; the renderer's localStorage fallback is process-crash-unsafe.
     preparedSubmissions,
+    // Stable, non-secret device identity (HM-25) for per-device resume cursors.
+    deviceIdentity,
   }
 
   // The assembled object intentionally over-satisfies the contract at runtime

@@ -49,6 +49,9 @@ const PROFILES = [
 const TURN_BUDGET = Number(process.env.HERMES_E2E_TURN_BUDGET ?? '6')
 let turnsUsed = 0
 
+/** Canonical lowercase UUID v4 (HM-25 contract). */
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
@@ -87,6 +90,31 @@ async function openClient(browser, profile, origin) {
   return { context, page }
 }
 
+/**
+ * The steps after the token is submitted: dismiss the desktop renderer's
+ * first-run onboarding if the backend says it is due, then wait for the shell.
+ */
+async function finishSignIn(page) {
+  const chooseLater = page.getByRole('button', { name: /choose a provider later/i })
+  if (await chooseLater.count()) {
+    await chooseLater.first().click().catch(() => {})
+    await chooseLater.first().waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {})
+  }
+  // Wide layouts dock a "Sessions" pane and title the composer "NEW SESSION".
+  await page.locator('text=NEW SESSION').or(page.locator('text=Sessions')).first().waitFor({ state: 'visible', timeout: 45_000 })
+}
+
+/** The whole token login, for scenarios that do not need the intermediate screens. */
+async function signIn(page, gatewayUrl, token) {
+  await page.getByLabel('Gateway URL').waitFor({ state: 'visible', timeout: 20_000 })
+  await page.getByLabel('Gateway URL').fill(gatewayUrl)
+  await page.getByRole('button', { name: 'Connect' }).click()
+  await page.getByLabel('Session token').waitFor({ state: 'visible', timeout: 20_000 })
+  await page.getByLabel('Session token').fill(token)
+  await page.getByRole('button', { name: 'Connect' }).click()
+  await finishSignIn(page)
+}
+
 /** Steps 1–4 for one viewport. `gatewayUrl` is https. */
 async function runProfile(browser, profile, origin, gatewayUrl, token) {
   console.log(`\n▸ ${profile.name} (${profile.width}x${profile.height})`)
@@ -117,16 +145,7 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     // due) overlays the shell; dismiss it the way a user does. The mock answers
     // `onboarding.state` as not-run, so this is only a fallback against a real
     // gateway that does want to onboard.
-    const chooseLater = page.getByRole('button', { name: /choose a provider later/i })
-    if (await chooseLater.count()) {
-      await chooseLater.first().click().catch(() => {})
-      await chooseLater.first().waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {})
-    }
-
-    // The renderer boots its own UI. Wide layouts dock a "Sessions" pane and
-    // title the composer "NEW SESSION"; either proves the shell mounted.
-    const shell = page.locator('text=NEW SESSION').or(page.locator('text=Sessions')).first()
-    await shell.waitFor({ state: 'visible', timeout: 45_000 })
+    await finishSignIn(page)
     check(`${profile.name}: login reaches the chat shell`, true)
     // The titlebar controls mount a beat after the first paint.
     await page.waitForTimeout(2000)
@@ -181,6 +200,18 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     })
     check(`${profile.name}: preparedSubmissions contract exposed`, bridge.journal)
     check(`${profile.name}: journal absent from the renderer localStorage key`, bridge.fallbackKey === null)
+
+    // deviceIdentity (HM-25): contract method present and returning a v4 uuid.
+    const identity = await page.evaluate(async () => {
+      try {
+        const value = await window.hermesDesktop?.deviceIdentity?.()
+        return { deviceId: value?.device_id ?? null, label: value?.label ?? null }
+      } catch {
+        return { deviceId: null, label: null }
+      }
+    })
+    check(`${profile.name}: deviceIdentity returns a v4 uuid`, UUID_V4.test(identity.deviceId ?? ''))
+    check(`${profile.name}: deviceIdentity carries a label`, typeof identity.label === 'string' && identity.label.length > 0)
   } finally {
     await context.close()
   }
@@ -209,6 +240,33 @@ async function runTwoClients(browser, origin, gatewayUrl, token) {
   }
 }
 
+/** HM-25: the id must survive a relaunch. In a browser that is a page reload. */
+async function runIdentityPersistence(browser, origin, gatewayUrl, token) {
+  console.log('\n▸ device identity across a relaunch')
+  const { context, page } = await openClient(browser, PROFILES[3], origin)
+  try {
+    await signIn(page, gatewayUrl, token)
+    const before = await page.evaluate(async () => (await window.hermesDesktop?.deviceIdentity?.())?.device_id ?? null)
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    if (await page.getByLabel('Gateway URL').count()) {
+      // A fresh origin asks to connect again; a saved target goes straight in.
+      await signIn(page, gatewayUrl, token)
+    } else {
+      await page.getByText('Sessions', { exact: false }).first().waitFor({ state: 'visible', timeout: 45_000 }).catch(() => {})
+    }
+    const after = await page.evaluate(async () => (await window.hermesDesktop?.deviceIdentity?.())?.device_id ?? null)
+
+    check(
+      'deviceIdentity: same id across a relaunch',
+      Boolean(before) && before === after,
+      before ? `${before.slice(0, 8)}…` : 'no id before the reload',
+    )
+  } finally {
+    await context.close()
+  }
+}
+
 async function main() {
   if (!fs.existsSync(path.join(distDir, 'index.html'))) {
     console.error(`No built bundle at ${distDir}. Run: npm run build:mobile`)
@@ -233,6 +291,7 @@ async function main() {
       await runProfile(browser, profile, origin, gatewayUrl, token)
     }
     await runTwoClients(browser, origin, gatewayUrl, token)
+    await runIdentityPersistence(browser, origin, gatewayUrl, token)
   } finally {
     await browser.close()
     server.close()
