@@ -54,3 +54,14 @@ jobs:
       - name: Typecheck
         working-directory: apps/mobile
         run: npm run typecheck
+
+  upstream-patches:
+    name: carried upstream patches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every carried patch must still apply (HM-16)
+        run: node scripts/apply-upstream-patches.mjs --check
+      - name: Self-test the apply mechanism
+        run: node scripts/apply-upstream-patches.mjs --self-test
