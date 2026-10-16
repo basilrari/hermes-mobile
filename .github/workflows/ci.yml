@@ -1,0 +1,127 @@
+name: ci
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # One waiter. It looks only for a verdict on this head, for 60 minutes.
+  # VERDICT: APPROVE passes. Any other verdict fails now. No verdict after
+  # 60 minutes fails. Do not add pull_request_review or cancel-in-progress.
+  # A second run sends this waiter home, and GitHub keeps the cancelled
+  # check, so APPROVE still cannot merge.
+  review-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check for APPROVE verdict in review comments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          WAIT_S=3600
+          INTERVAL_S=20
+          fetch() {
+            url="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100"
+            python -c 'import json; json.dump([], open("reviews.json", "w"))'
+            pages=0
+            while [ -n "$url" ]; do
+              pages=$((pages + 1))
+              if [ "$pages" -gt 20 ]; then
+                echo "review-gate FAIL: reviews pagination exceeded 20 pages"
+                exit 1
+              fi
+              hdr=$(mktemp)
+              body=$(mktemp)
+              curl -sS -f -D "$hdr" -o "$body" \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "User-Agent: github-workflow-standard" \
+                -H "Accept: application/vnd.github+json" \
+                "$url"
+              python -c '
+          import json, sys
+          acc = json.load(open("reviews.json"))
+          page = json.load(open(sys.argv[1]))
+          if not isinstance(page, list):
+              raise SystemExit("reviews page is not a list")
+          acc.extend(page)
+          json.dump(acc, open("reviews.json", "w"))
+          ' "$body"
+              url=$(python -c '
+          import sys
+          next_url = ""
+          for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+              if not line.lower().startswith("link:"):
+                  continue
+              for part in line.split(","):
+                  if "rel=\"next\"" not in part:
+                      continue
+                  start = part.find("<")
+                  end = part.find(">")
+                  if start != -1 and end > start:
+                      next_url = part[start + 1:end].strip()
+          print(next_url)
+          ' "$hdr") || exit 1
+              rm -f "$hdr" "$body"
+            done
+            echo "review-gate: fetched ${pages} review page(s)"
+          }
+          decide() {
+            python -c '
+          import json, os, sys
+          head = os.environ.get("HEAD_SHA", "")
+          reviews = json.load(open("reviews.json"))
+          verdicts = []
+          kept = ("COMMENTED", "APPROVED", "CHANGES_REQUESTED")
+          for rv in reviews:
+              if head and rv.get("commit_id") != head:
+                  continue
+              if (rv.get("state") or "") not in kept:
+                  continue
+              body = (rv.get("body") or "").upper()
+              for line in body.splitlines():
+                  bare = line.strip()
+                  if bare.startswith("VERDICT:"):
+                      verdicts.append((rv.get("submitted_at") or "", bare))
+                      break
+          if not verdicts:
+              print("review-gate: no VERDICT on this head yet")
+              sys.exit(2)
+          verdicts.sort()
+          latest = verdicts[-1][1]
+          n = len(verdicts)
+          if latest == "VERDICT: APPROVE":
+              print("review-gate PASS: latest verdict is APPROVE (%d review(s))" % n)
+              sys.exit(0)
+          print("review-gate FAIL: latest verdict is " + latest)
+          sys.exit(1)
+          '
+          }
+          start=$SECONDS
+          while true; do
+            fetch
+            rc=0
+            decide || rc=$?
+            if [ "$rc" -eq 0 ]; then
+              exit 0
+            fi
+            if [ "$rc" -eq 1 ]; then
+              exit 1
+            fi
+            elapsed=$((SECONDS - start))
+            if [ "$elapsed" -ge "$WAIT_S" ]; then
+              echo "review-gate FAIL: no VERDICT line after ${WAIT_S}s"
+              exit 1
+            fi
+            echo "review-gate: waiting for VERDICT (${elapsed}s / ${WAIT_S}s)"
+            sleep "$INTERVAL_S"
+          done
