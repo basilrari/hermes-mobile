@@ -93,3 +93,14 @@ export function onPowerResume(callback: () => void): () => void {
     void handle.then((h) => h.remove())
   }
 }
+
+/**
+ * Wire Capacitor's app foreground/background state into a callback (HM-32).
+ * `active` is true when the app is on screen. Returns an unsubscribe.
+ */
+export function onAppStateChange(callback: (active: boolean) => void): () => void {
+  const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive))
+  return () => {
+    void handle.then((h) => h.remove())
+  }
+}

@@ -5,6 +5,8 @@ import { useLocation } from 'react-router'
 
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { $panesFlipped } from '@/store/layout'
+import { onAppStateChange } from '../bridge/native'
+import { setSuspended } from '../bridge/socket-lifecycle'
 
 /**
  * MobileBehaviors — the touch adaptations layered over the reused desktop UI.
@@ -104,10 +106,18 @@ export function MobileBehaviors() {
       })
       .catch(() => {})
 
+    // HM-32: drop the gateway socket when the app goes to the background, and let
+    // it dial again on the way back. Android keeps a hidden WebView's sockets
+    // open, which holds the radio and the process warm with nothing on screen.
+    const removeAppState = onAppStateChange((active) => {
+      setSuspended(!active)
+    })
+
     return () => {
       observer.disconnect()
       document.removeEventListener('pointerdown', onPointerDown, true)
       backHandle?.remove()
+      removeAppState()
       void kbShow.then((h) => h?.remove())
       void kbHide.then((h) => h?.remove())
       document.documentElement.removeAttribute('data-drawer-open')

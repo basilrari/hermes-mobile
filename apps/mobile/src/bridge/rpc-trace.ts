@@ -17,6 +17,8 @@
  * WebSocket wrap, no global).
  */
 
+import { onSocketCreated } from './socket-lifecycle'
+
 export type TraceDirection = 'in' | 'out' | 'rest'
 
 export interface TraceEntry {
@@ -259,8 +261,21 @@ export function installRpcTrace(win: TraceWindow = globalThis as unknown as Trac
   if (!traceEnabled()) return null
   if (win.__hermesRpcTraceInstalled) return rpcTrace
 
+  // The socket-lifecycle module wraps WebSocket unconditionally (it has to work
+  // when tracing is off), so when it is installed we instrument through its
+  // observer hook instead of wrapping a second time — two wrappers would record
+  // every frame twice. Round: HM-32.
+  const lifecycleInstalled = (win as unknown as { __hermesSocketLifecycleInstalled?: boolean }).__hermesSocketLifecycleInstalled
   const Original = win.WebSocket
-  if (typeof Original === 'function' && !(Original as { __hermesTraced?: boolean }).__hermesTraced) {
+  if (lifecycleInstalled) {
+    onSocketCreated((socket) => {
+      try {
+        instrumentWebSocket(socket as unknown as WebSocketLike, rpcTrace)
+      } catch {
+        /* tracing must never break the app */
+      }
+    })
+  } else if (typeof Original === 'function' && !(Original as { __hermesTraced?: boolean }).__hermesTraced) {
     const Wrapped = function (this: unknown, url: string, protocols?: string | string[]): WebSocketLike {
       const socket =
         protocols === undefined
