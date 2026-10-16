@@ -50,6 +50,7 @@ describe('authModeFromStatus', () => {
 })
 
 describe('ws url builders', () => {
+  // The builder is deliberately scheme-agnostic. https-only is enforced in normalizeRemoteBaseUrl.
   it('token mode embeds an (encoded) ?token=', () => {
     expect(buildGatewayWsUrl('http://gw:9119', 'tok en')).toBe('ws://gw:9119/api/ws?token=tok%20en')
   })

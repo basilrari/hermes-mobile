@@ -3,15 +3,14 @@
   "private": true,
   "version": "0.1.1",
   "type": "module",
-  "description": "Mobile (Capacitor) client for Hermes Agent — a thin Android/iOS shell that reuses the desktop renderer over the gateway's HTTP/WebSocket API (the same Remote-gateway path the desktop uses).",
+  "description": "Mobile (Capacitor) client for Hermes Agent — a thin Android shell that reuses the desktop renderer over the gateway's HTTP/WebSocket API (the same Remote-gateway path the desktop uses).",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run && node ../../scripts/check-legacy-app-id.mjs",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "cap:sync": "cap sync",
-    "cap:android": "cap sync android && cap open android",
-    "cap:ios": "cap sync ios && cap open ios"
+    "cap:android": "cap sync android && cap open android"
   },
   "dependencies": {
     "@capacitor-community/safe-area": "^8.0.1",
@@ -33,7 +32,6 @@
     "@capacitor/android": "^8.4.1",
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.1",
-    "@capacitor/ios": "^8.4.1",
     "@rolldown/plugin-babel": "^0.2.3",
     "babel-plugin-react-compiler": "^1.0.0",
     "vitest": "^4.1.5"
