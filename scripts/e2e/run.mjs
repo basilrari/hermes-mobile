@@ -154,15 +154,16 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     }
     await page.screenshot({ path: path.join(shotDir, `${profile.name}-03-app.png`) })
 
-    // 4. the trace is live and clean.
+    // 4. the trace is live and clean. Zero relay traffic is M1's acceptance
+    // (#11 removed the Desktop relay from mobile; this is its assertion).
     const trace = await page.evaluate(() => (window.__hermesRpcTrace ? window.__hermesRpcTrace.toText() : null))
     check(`${profile.name}: RPC trace global is live`, typeof trace === 'string' && trace.length > 0)
-    // The relay runs inside the renderer today; HM-11 removes it on mobile and
-    // flips this to a hard assertion. Until then it is reported, not failed.
     const relayCalls = (trace ?? '').split('\n').filter((line) => line.includes('bot_relay.'))
-    if (relayCalls.length > 0) {
-      console.log(`    ! ${profile.name}: ${relayCalls.length} bot_relay.* call(s) — expected until #11 lands`)
-    }
+    check(
+      `${profile.name}: no bot_relay.* call`,
+      relayCalls.length === 0,
+      relayCalls.length ? relayCalls.slice(0, 3).join(' | ') : 'the relay is off on mobile',
+    )
     if (process.env.HERMES_E2E_DUMP_TRACE === '1') console.log(trace ?? '(no trace)')
   } finally {
     await context.close()

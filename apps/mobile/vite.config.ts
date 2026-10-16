@@ -8,6 +8,8 @@ import tailwindcss from '@tailwindcss/vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+import { hermesMobileRelayOverride } from './src/overrides/relay-override'
+
 // Resolve a path relative to this config file.
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
@@ -44,7 +46,15 @@ function compilerPreset() {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), babel({ presets: [compilerPreset()] }), tailwindcss(), emojibaseAssets()],
+  plugins: [
+    // Mobile overrides (HM-11): swap the Desktop bot relay for a no-op. Must run
+    // before the default resolver, hence enforce:'pre' inside the plugin.
+    hermesMobileRelayOverride(r('./src/overrides/hermes-bots-relay.ts')),
+    react(),
+    babel({ presets: [compilerPreset()] }),
+    tailwindcss(),
+    emojibaseAssets(),
+  ],
   define: { __HERMES_APP_VERSION__: JSON.stringify(pkg.version) },
   css: { postcss: { plugins: [] } },
   resolve: {
