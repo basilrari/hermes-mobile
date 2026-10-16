@@ -58,6 +58,17 @@
 </div>
 <p class="muted">Telegram (<code>hermes gateway</code>) runs on the same machine but stays separate.</p>
 
+<h2>Protocol contracts (G0)</h2>
+<p>New gateway calls are written down before anyone codes them. A stock gateway stays usable: each call is behind a flag on <code>groups.capabilities</code>, and the app keeps polling when the flag is absent. Lead sign-off is still open.</p>
+<div class="scroll"><table>
+<tr><th>Contract</th><th>Flag</th><th>Adds</th></tr>
+<tr><td><code>groups.event</code></td><td><code>event_push</code></td><td>A hint that a room changed (<code>room_id</code>, latest seq, kind, authority epoch). The client fetches the new rows. Not a second copy of the message.</td></tr>
+<tr><td><code>groups.read</code></td><td><code>read_cursors</code></td><td>One read marker per room, shared by every device. <code>groups.list</code> / <code>groups.state</code> gain <code>read_seq</code> and <code>unread_count</code>.</td></tr>
+<tr><td>Device resume</td><td><code>device_cursors</code></td><td>A random device id and a per-device “where I was” cursor. Not the read marker. No hardware ids.</td></tr>
+<tr><td>Bridge</td><td>method present or absent</td><td>Mobile implements the existing <code>preparedSubmissions</code> journal, plus an optional <code>deviceIdentity()</code>.</td></tr>
+</table></div>
+<p class="muted">Full text: <code>planning/contracts/</code>. The room hint uses the same event envelope as <code>sessions.changed</code> (<a href="https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/tui_gateway/server.py#L717-L720"><code>_event_frame</code></a>). Its epoch is the room’s authority epoch, which survives a restart; it is not the in-memory session replay epoch (<a href="https://github.com/NousResearch/hermes-agent/blob/4e59ac2b883b4133ea8a2d299abac45189781c09/tui_gateway/event_replay.py#L48-L50"><code>replay_epoch</code></a>). A hint for an unknown room makes the client refetch <code>groups.list</code>. <code>groups.log</code> is paged on <code>cursor</code> until <code>has_more</code> is false. Upstream claims are pinned to <a href="https://github.com/NousResearch/hermes-agent/commit/4e59ac2b883b4133ea8a2d299abac45189781c09"><code>4e59ac2b883b4133ea8a2d299abac45189781c09</code></a>.</p>
+
 <h2>What exists vs what we build</h2>
 <div class="scroll"><table>
 <tr><th>Piece</th><th>Today</th><th>Work</th></tr>
