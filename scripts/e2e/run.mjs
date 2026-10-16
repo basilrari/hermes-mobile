@@ -52,6 +52,32 @@ let turnsUsed = 0
 /** Canonical lowercase UUID v4 (HM-25 contract). */
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
+/**
+ * Storage classification (HM-13). Option D: the device holds UI preferences and
+ * bridge state only — never conversation state.
+ *
+ * CONVERSATION_STATE is a hard failure: a key here means messages, room logs or
+ * session history are living on the device.
+ * KNOWN actually seen on a full login + boot, i.e. the inventory that was
+ * classified into docs/ARCHITECTURE.md. A key that is neither is *reported*, not
+ * failed — a renderer sync legitimately brings new UI preferences, and the point
+ * is that every key gets classified rather than that the list is frozen.
+ */
+const CONVERSATION_STATE = /preparedSubmissions\.v1$|group-chat|(^|[.\-_/])(messages|rooms?|sessions?|history)([.\-_/]|$)/i
+const KNOWN_STORAGE = [
+  { match: /^CapacitorStorage\.hermes\.(target|cookies\..+|preparedSubmissions\.v1|device\.[a-z]+\.v1)$/, kind: 'bridge state', note: 'user-entered target/cookies, the send journal, the device id' },
+  { match: /^hermes-boot-/, kind: 'ui pref', note: 'boot theme/background' },
+  { match: /^hermes-desktop-active-profile-v1$/, kind: 'ui pref', note: 'last active profile' },
+  { match: /^hermes\.desktop\./, kind: 'ui pref / rebuildable cache', note: 'layout, panes, tools, theme, tutorials, pricing' },
+  { match: /^hermes\.updates\.last-passive-check$/, kind: 'ui pref', note: 'update check timestamp' },
+]
+
+/** Classify one key. Returns { kind, note, known }. */
+function classifyStorageKey(key) {
+  for (const rule of KNOWN_STORAGE) if (rule.match.test(key)) return { kind: rule.kind, note: rule.note, known: true }
+  return { kind: 'UNCLASSIFIED', note: 'add a row to docs/ARCHITECTURE.md and a rule here', known: false }
+}
+
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
@@ -75,6 +101,7 @@ function serveDist() {
 }
 
 const results = []
+const storageInventory = []
 function check(name, ok, detail = '') {
   results.push({ name, ok, detail })
   console.log(`${ok ? '  ✓' : '  ✗'} ${name}${detail ? `  — ${detail}` : ''}`)
@@ -212,6 +239,45 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     })
     check(`${profile.name}: deviceIdentity returns a v4 uuid`, UUID_V4.test(identity.deviceId ?? ''))
     check(`${profile.name}: deviceIdentity carries a label`, typeof identity.label === 'string' && identity.label.length > 0)
+
+    // Storage inventory (HM-13). KEYS AND SIZES ONLY — never a value: the same
+    // find could otherwise put a session token into an artefact.
+    const inventory = await page.evaluate(async () => {
+      const local = []
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index)
+        if (key === null) continue
+        local.push({ key, bytes: (window.localStorage.getItem(key) ?? '').length })
+      }
+      const session = []
+      for (let index = 0; index < window.sessionStorage.length; index += 1) {
+        const key = window.sessionStorage.key(index)
+        if (key === null) continue
+        session.push({ key, bytes: (window.sessionStorage.getItem(key) ?? '').length })
+      }
+      let databases = []
+      try {
+        databases = ((await window.indexedDB?.databases?.()) ?? []).map((db) => db.name ?? '(unnamed)')
+      } catch {
+        databases = []
+      }
+      return {
+        local: local.sort((a, b) => a.key.localeCompare(b.key)),
+        session: session.sort((a, b) => a.key.localeCompare(b.key)),
+        databases,
+      }
+    })
+    storageInventory.push({ profile: profile.name, ...inventory })
+
+    const keys = inventory.local.map((entry) => entry.key)
+    const leaked = keys.filter((key) => CONVERSATION_STATE.test(key))
+    check(
+      `${profile.name}: no conversation state in localStorage`,
+      leaked.length === 0,
+      leaked.length ? leaked.join(' | ') : `${keys.length} key(s), all UI prefs or bridge state`,
+    )
+    const unknown = keys.filter((key) => !classifyStorageKey(key).known)
+    if (unknown.length > 0) console.log(`    ! ${profile.name}: unclassified storage key(s): ${unknown.join(', ')}`)
   } finally {
     await context.close()
   }
@@ -298,6 +364,14 @@ async function main() {
     if (mock) await mock.close()
   }
 
+  const classified = storageInventory.map((entry) => ({
+    profile: entry.profile,
+    sessions: entry.session.length,
+    databases: entry.databases,
+    local: entry.local.map((item) => ({ ...item, ...classifyStorageKey(item.key) })),
+  }))
+  fs.writeFileSync(path.join(shotDir, 'storage-inventory.json'), `${JSON.stringify(classified, null, 2)}\n`)
+  console.log(`\nstorage inventory: ${storageInventory[0]?.local.length ?? 0} localStorage key(s), ${storageInventory[0]?.session.length ?? 0} sessionStorage key(s), ${storageInventory[0]?.databases.length ?? 0} IndexedDB database(s) — see storage-inventory.json`)
   const failed = results.filter((r) => !r.ok)
   const cap = turnsUsed > TURN_BUDGET
   console.log(`\nLLM turns: ${turnsUsed} / ${TURN_BUDGET} budget (DeepSeek Flash only)`)
