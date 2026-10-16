@@ -9,7 +9,7 @@ runs on your gateway.
 The app is based on [NousResearch/hermes-agent PR #49834](https://github.com/NousResearch/hermes-agent/pull/49834)
 by [@Bentlybro](https://github.com/Bentlybro). See [LICENSE](LICENSE) for MIT terms and attribution.
 
-> Status: milestone 1. Unofficial, Android only, debug builds only.
+> Status: M0 in progress. Unofficial, Android-only, HTTPS-only, app ID `io.github.basilrari.hermesmobile`, debug builds only.
 >
 > **v0.1.1**: the Desktop renderer is synced to upstream `hermes-agent` main
 > (`7bda2a33`), so **Bot Mode** (the *Bots* tab next to *Sessions*) is included and works
@@ -52,7 +52,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Connecting to a gateway
 
 1. On the machine that runs Hermes, publish the dashboard with `tailscale serve` so the phone
-   reaches it at an `https://….ts.net` URL. The app refuses `http://` and `ws://`.
+   reaches it at an `https://….ts.net` URL. The app accepts only `https://` gateway URLs.
 2. In the app, enter that gateway URL, for example `https://my-box.tailnet-name.ts.net`.
 3. The app probes `GET /api/status` and picks the auth mode:
    - **Token gateway**: paste the gateway's session token. You enter it at runtime and it's stored
@@ -69,8 +69,5 @@ Put both the gateway host and the phone on the same tailnet and publish the dash
 
 - The repo contains no secrets. Tokens and passwords are entered at runtime only.
 - The debug APK is signed with the standard Android debug key. Don't distribute it as a production build.
-- `androidScheme` is `https`, so the WebView origin is `https://localhost` instead of `http://localhost`.
-  That origin change wipes WebView-stored login. The one-time reinstall above already removes the
-  previous app's data, so the scheme change does not need a separate migration.
-- Android cleartext is off: `usesCleartextTraffic="false"` and `cleartextTrafficPermitted="false"`,
-  with no cleartext domain exceptions. The connect screen rejects `http://` and `ws://` URLs.
+- `androidScheme` is `https`, so the WebView origin is `https://localhost`.
+- Android does not permit cleartext traffic. The connect screen accepts only `https://` gateway URLs.

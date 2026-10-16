@@ -46,12 +46,12 @@ connect flow until a target is saved, then mounts the Desktop renderer.
 - `vite.config.ts` aliases `@` → `../desktop/src` and `@hermes/shared` → `../shared/src`, so
   the desktop components compile into the mobile bundle without being copied or forked.
 - `capacitor.config.ts`: `webDir: dist`, CapacitorHttp enabled, `androidScheme: 'https'`.
-  Cleartext is off. The WebView origin is `https://localhost`.
+  The WebView origin is `https://localhost`. Gateway traffic is `https://` and `wss://` only.
 - The Android project lives in `apps/mobile/android`, a standard Capacitor 8 Gradle project.
 
 ## Scope and what's left out of this repo
 
-From upstream we kept only what the mobile app needs: `apps/mobile` (minus the iOS project),
+From upstream we kept only what the mobile app needs: `apps/mobile`,
 `apps/desktop` renderer source plus `electron/` (the renderer imports types and config from it),
 `apps/shared`, and the safe-area patch. We left out the Python agent, TUI, web dashboard,
 installer, desktop packaging scripts and PR screenshots.
