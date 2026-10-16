@@ -13,8 +13,8 @@ Taking over the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).
 
 > Status: M0 in progress. Unofficial, Android-only, HTTPS-only, app ID `io.github.basilrari.hermesmobile`, debug builds only.
 >
-> **v0.1.1**: the Desktop renderer is synced to upstream `hermes-agent` main
-> (`7bda2a33`), so **Bot Mode** (the *Bots* tab next to *Sessions*) is included and works
+> **v0.1.1**: the Desktop renderer is pinned to upstream `hermes-agent` main
+> (`450ad5055e`), so **Bot Mode** (the *Bots* tab next to *Sessions*) is included and works
 > against a remote gateway. On tablets the left sidebar stays docked like the desktop app;
 > on phones it opens as an edge overlay from the titlebar toggle.
 

@@ -10,8 +10,19 @@
 set -eu
 
 if ! command -v gitleaks >/dev/null 2>&1; then
-  echo "gitleaks: not installed; skipping the staged secret scan." >&2
-  echo "gitleaks: install it, then re-run: https://github.com/gitleaks/gitleaks#installing" >&2
+  # Default: warn and continue, so a contributor without the binary can commit.
+  # Strict mode makes a missing binary a hard failure instead. Two ways in:
+  # HERMES_GITLEAKS_REQUIRE=1 for one commit, or a persistent opt-in set by
+  # `scripts/install-hooks.sh --require`. Round-2 finding: the comment named a
+  # flag the installer ignored, so the strict path could not be enabled as
+  # documented.
+  if [ "${HERMES_GITLEAKS_REQUIRE:-0}" = "1" ] || [ "$(git config --bool hermes.gitleaksRequire 2>/dev/null || echo false)" = "true" ]; then
+    echo "gitleaks: REQUIRED but not installed — commit blocked (strict mode)." >&2
+    echo "gitleaks: install it: https://github.com/gitleaks/gitleaks#installing" >&2
+    exit 1
+  fi
+  echo "gitleaks: not installed; skipping the staged secret scan (CI still scans the full history)." >&2
+  echo "gitleaks: make this fatal with \`scripts/install-hooks.sh --require\` or HERMES_GITLEAKS_REQUIRE=1." >&2
   exit 0
 fi
 

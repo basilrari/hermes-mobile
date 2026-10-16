@@ -56,6 +56,41 @@ From upstream we kept only what the mobile app needs: `apps/mobile`,
 `apps/shared`, and the safe-area patch. We left out the Python agent, TUI, web dashboard,
 installer, desktop packaging scripts and PR screenshots.
 
+## Option D — the gateway is the single source of truth
+
+Sessions, gateway-hosted rooms, read state and bot-to-bot threads live on the
+gateway. The device keeps **no conversation state**: see *Device storage* below.
+
+```
+ Desktop (Electron)                Android app (tablet)
+        │ /api/ws JSON-RPC                │ /api/ws JSON-RPC (WSS only)
+        └───────────────┬─────────────────┘
+                        ▼
+        pavillion-claw: hermes dashboard  (tailscale serve, password login)
+          ├─ sessions   <profile>/state.db   sessions.changed, session.events.since
+          ├─ rooms      shared-state.db      groups.*  (+ groups.event, groups.read)
+          ├─ hosted room driver (runs rounds with no client attached)
+          └─ bot inbox  <profile>/runtime/bot_live_delivery  (message_agent)
+```
+
+What that means for this app, in the order it was built:
+
+| Concern | Where it lives | Status |
+|---|---|---|
+| Same chats on Desktop and the app | gateway `state.db` | Works (Desktop renderer, unmodified). |
+| Live room updates | `groups.event` push + incremental `groups.log` | **Gateway side not landed** — upstream work (HM-19/20/21); the renderer still polls every 2 s while a room is visible. No `groups.event` consumer exists in the bridge yet, so treat the fallback as the design rule below, not as shipped code. |
+| Read state | one watermark per conversation, global | Sessions use `PATCH unread:false` + `sessions.changed`. Rooms have **no** read state upstream yet (HM-21/23). |
+| Pending sends survive an app kill | bridge `preparedSubmissions` journal | Implemented (HM-12); round trip needs a room (HM-26). |
+| No Desktop relay on mobile | `src/overrides/hermes-bots-relay.ts` | Implemented (HM-11); the harness asserts zero `bot_relay.*` calls. |
+| Device identity for resume cursors | bridge `deviceIdentity()` | Implemented (HM-25); `devices.*` is P2 and feature-gated. |
+| Bot-to-bot | backend inbox `message_agent` | Out of scope here beyond not breaking it; no Desktop relay is involved. |
+
+The upstream gaps are tracked as small, feature-flagged PRs to
+`NousResearch/hermes-agent` (HM-19…HM-24) and carried as patches until they
+merge (see *Renderer sync*). Until then the app must keep working against a
+stock gateway — that is a design rule, not a nicety.
+
+
 ## Renderer sync (HM-16)
 
 `apps/desktop` and `apps/shared` are **copies of upstream**, not a fork: no local edits,

@@ -1,6 +1,6 @@
 # Handoff: hermes-mobile
 
-This page is for an agent taking over the project. It covers the goal, the decisions already made, the rules, how to build and test, what is merged, what is open, and what to do next. State was last updated from GitHub on 2026-10-16 (Taipei), after #35, #37 and #38 merged.
+This page is for an agent taking over the project. It covers the goal, the decisions already made, the rules, how to build and test, what is merged, what is open, and what to do next. State was last updated from GitHub on 2026-10-16 (Taipei), after #51 merged. **Everything in this file was re-checked against `main` on that date** — if a section disagrees with the repo, the repo wins and this file is the bug (`HM-29`).
 
 ## 1. Goal and scope
 
@@ -72,7 +72,7 @@ More detail: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). Gateway setup: [`docs/GA
 | `apps/mobile` | The Capacitor app: bridge, connect and login screens, Android project (`apps/mobile/android`). |
 | `apps/mobile/src/bridge` | `window.hermesDesktop` implementation and its vitest tests. |
 | `apps/mobile/src/mobile` | Mobile-only UI: connect screens, safe-area and keyboard behaviour, theme fallback. |
-| `apps/desktop` | Upstream renderer source, synced to hermes-agent `7bda2a33`. Do not edit except through a resync. |
+| `apps/desktop` | Upstream renderer source, pinned to hermes-agent `450ad5055e`. Do not edit except through a resync. |
 | `apps/shared` | Upstream shared gateway client (`@hermes/shared`). |
 | `patches/` | `patch-package` fix for `@capacitor-community/safe-area`. |
 | `scripts/check-legacy-app-id.mjs` | Fails if the previous application ID appears anywhere except the one README reinstall line. Runs as part of `npm test`. Do not write the old ID in new files. |
@@ -101,7 +101,7 @@ npm test            # vitest (bridge) + scripts/check-legacy-app-id.mjs
 npm run typecheck   # tsc -p tsconfig.app.json --noEmit
 ```
 
-On `main` after #35, vitest reports 39 passing tests in 3 files.
+On `main` after #51, `npm test` reports **98 passing tests in 8 files** (was 39 in 3 before the M0/M1 work).
 
 Pitfall: `apps/mobile/android/app/src/main/assets/capacitor.config.json` is generated and git-ignored. In a checkout that was synced before #34, it still holds the old app ID, and the app-ID check in `npm test` fails with `expected exactly one hit, in README.md; found 2`. Run `npx cap sync android` (Node 22+) to regenerate it.
 
@@ -119,7 +119,27 @@ The root script `npm run apk:debug` runs the same three steps. The current versi
 
 ### Headless verification
 
-The headless harness (#6) is not built yet. Until it lands, verify UI changes like this:
+The harness (#6) exists. Run it:
+
+```bash
+npm run e2e        # builds, then drives the built bundle in headless Chrome
+```
+
+It logs in against an in-process **mock** gateway at four viewports (412x915,
+915x412, 800x1280, 1280x800) and asserts, per viewport: the connect screen
+renders; an `http://` gateway is refused **with a visible reason**; token login
+reaches the chat shell; the Bots roster surface is reachable; the RPC trace is
+live and shows **zero `bot_relay.*`**; `preparedSubmissions` is exposed while the
+renderer's `localStorage` fallback stays empty; `deviceIdentity()` returns a v4
+uuid; and **no conversation state is in any storage**. Plus a two-client pass and
+an id-across-a-relaunch pass. It is **47 checks**, all green on `main`.
+
+It cannot prove device, cookie or room behaviour (a browser uses `fetch`, not
+CapacitorHttp, and cannot read `Set-Cookie`; no hosted room is opened anywhere).
+Those stay on Basil's tablet checklist. To run it against the real box:
+`HERMES_E2E_GATEWAY_URL=… HERMES_E2E_TOKEN=… npm run e2e` on Basil's machine.
+
+The older manual recipe, if the harness is unavailable:
 
 1. `npm run build` in `apps/mobile`.
 2. Serve the bundle: `npx vite preview --host 127.0.0.1 --port 5180 --strictPort`.
@@ -148,22 +168,31 @@ On pavillion-claw, Basil runs the doctor as shown in [`docs/GATEWAY_SETUP.md`](G
 | #37 | `e4a4c5e` | #8 (HM-08) | Read-only gateway doctor, 31 tests. Lease check fails only on an epoch mismatch or a lease for an unknown room; two generations on different rooms warn; logs out after the capabilities call. |
 | #38 | `e5b2e4b` | #9 (HM-09) | `docs/GATEWAY_SETUP.md`: loopback 9119, `HERMES_DASHBOARD_PUBLIC_URL`, `tailscale serve --bg 9119`, interactive or stdin password hashing, systemd keep-alive on 127.0.0.1, bot markers, doctor. |
 | #35 | `639229f` | #10 (HM-10) | G0 contracts in `planning/contracts/`, approved by the lead. Codes: `groups.read` uses `4126`/`5124`, `devices.*` use `4125`/`5123`. `groups.read` joins the groups `_METHODS` tuple; `devices.*` register only in `server._methods` and the contract registry. `device_cursors` TTL is deliberately unfrozen (P2). |
+| #39 | `78b8d70` | — | This handoff doc. |
+| #41 | `8a82efa` | — | Repo standard: issue/PR templates + CI (`review-gate`, the only required check). Branch protection on `main`. |
+| #42 | `606f2c5` | #7 (HM-07) | gitleaks guard: config, `.githooks/pre-commit`, `scripts/install-hooks.sh`, and the `checks` workflow (secrets + app tests + carried patches). |
+| #43 | `d45315f` | #5 (HM-05) | Debug RPC trace: 2000-entry ring of method names/events/timings, `window.__hermesRpcTrace`, the version badge that shares it. |
+| #44 | `e19ca8f` | #6 (HM-06) | Headless harness (`npm run e2e`): four viewports, mock gateway, checklist template, turn counter. |
+| #45 | `a73318f` | #11 (HM-11) | The Desktop bot relay is off on mobile (Vite override); the harness asserts zero `bot_relay.*`. |
+| #46 | `4586313` | #16 (HM-16) | Renderer pin recorded (`450ad5055e`, already byte-identical), override table, carried-patch mechanism + CI check. |
+| #47 | `4c21384` | #12 (HM-12) | `preparedSubmissions` durable send journal in the bridge. |
+| #48 | `69f6afd` | #25 (HM-25) | `deviceIdentity()` in the bridge. |
+| #49 | `a67a475` | #13 (HM-13) | Measured on-device storage inventory + the no-conversation-state gate. |
 
-The planning files were committed directly as `ae245db`. Gate G0 is passed, so M2 contract-dependent work (#19, #21, #22, #25) may start.
-
-### Open PRs
-
-#39 (this handoff doc) only, until it merges.
+Gate G0 was passed at #35, so M2 contract-dependent work (#19, #21, #22, #25) may start; #25 has landed.
 
 ### Not done yet
 
-- **#18 patched hermes-agent branch:** started once and cancelled. No WIP exists: no HM-18 branch in this repo and no `basilrari` hermes-agent fork on GitHub. Start fresh. It blocks #19 and the rest of the M2 critical path. `docs/GATEWAY_SETUP.md` ends with a `TODO(HM-18)` placeholder for its runbook.
-- **Basil's M0 tablet checklist:** not run. It covers install of the renamed APK, HTTPS login against `https://pavillion-claw.tailfc1337.ts.net`, the WSS and ws-ticket flow, a real DeepSeek Flash reply, and a doctor report from pavillion-claw (the #8 acceptance line).
+- **#18 patched hermes-agent branch:** still not started. No HM-18 branch in this repo and no `basilrari` hermes-agent fork on GitHub. Start fresh. It blocks #19 and the rest of the M2 critical path, and it must be *deployed* on pavillion-claw, which is Basil's machine (rule 2). `docs/GATEWAY_SETUP.md` ends with a `TODO(HM-18)` placeholder for its runbook.
+- **Basil's M0 tablet checklist:** not run. Nothing in this repo can run it: it needs the tablet and the gateway password. Covers the renamed APK install, HTTPS login against `https://pavillion-claw.tailfc1337.ts.net`, the WSS and ws-ticket flow, a real DeepSeek Flash reply, and a doctor report from pavillion-claw (the #8 acceptance line).
 - **New debug APK release:** still needed. Both published releases (`v0.1.0-debug`, `v0.1.1-debug`) carry the old app ID and the cleartext build. Build from current `main` and publish a new pre-release before Basil's checklist.
+- **Upstream PRs (#19–#24, #33):** untouched. Gate G3 needs Basil's approval of each title and body before one opens, and they need a patched branch on his machine to test against.
 
 ### Issues
 
-Closed: #1, #8, #9, #10. #2 is still open even though #36 merged; close it after Basil's checklist confirms HTTPS login on the tablet. All other issues are open. Issue number N is HM-N.
+Closed: #1, #5, #6, #7, #8, #9, #10, #11, #12, #13, #16, #25. #2 is still open even though #36 merged; close it after Basil's checklist confirms HTTPS login on the tablet.
+
+Still open (21, `gh issue list --state open`): the M0 items that need the tablet (**#2**, #3, #4); the gateway items that need pavillion-claw (#17, #18, #28); the app items that need a room-capable gateway or a device (#15, #26, #27, #29, #30, #31, #32); and the upstream set (#19–#24, #33). Issue number N is HM-N.
 
 ## 8. Order of work and critical path
 
@@ -171,8 +200,8 @@ Milestones close in order, each when its gate passes. Engineer A owns the app; E
 
 | Milestone | Issues (Eng A) | Issues (Eng B) | Gate |
 |---|---|---|---|
-| [M0 Baseline on device](https://github.com/basilrari/hermes-mobile/milestone/1) | #1 ✓, #2 (merged, awaiting tablet check), #3, #4, #5, #6, #7 | #8 ✓, #9 ✓, #10 ✓ | Headless + tablet checklist; G0 ✓ |
-| [M1 Gateway-only client](https://github.com/basilrari/hermes-mobile/milestone/2) | #11–#16 | #17, #18 | Headless + tablet checklist |
+| [M0 Baseline on device](https://github.com/basilrari/hermes-mobile/milestone/1) | #1 ✓, #2 (merged, awaiting tablet check), #3, #4, **#5 ✓, #6 ✓, #7 ✓** | #8 ✓, #9 ✓, #10 ✓ | Headless ✓; tablet checklist outstanding; G0 ✓ |
+| [M1 Gateway-only client](https://github.com/basilrari/hermes-mobile/milestone/2) | **#11 ✓, #12 ✓, #13 ✓, #14 ✓, #16 ✓**, #15 (needs a device) | #17, #18 | Headless ✓; tablet checklist outstanding |
 | [M2 Live sync and read state](https://github.com/basilrari/hermes-mobile/milestone/3) | #25, #26 | #19–#24 (#24 stretch) | Headless + tablet checklist |
 | [M3 Continuity verified](https://github.com/basilrari/hermes-mobile/milestone/4) | #27, #29 | #28 | Headless + tablet checklist |
 | [M4 Tablet polish](https://github.com/basilrari/hermes-mobile/milestone/5) | #30, #31, #32 | #33 | Headless + tablet checklist |
@@ -183,12 +212,12 @@ Key dependencies:
 - Gateway: #17 and #18 need #8 and #9 (done).
 - **Critical path:** #18 (patched branch) → #19 (`groups.event`) → #20 and #21 → #23 → #26 (integration) → #27 (continuity matrix) → #30.
 
-Next steps, in order:
+Next steps, in order — **the first two are Basil's; nothing in this repo can do them**:
 
-1. Eng B: start #18 fresh.
-2. Eng A: build and publish a new debug APK from `main`; then #6 (headless harness), #5 (RPC trace), #7 (secrets guard and CI), #16 (resync).
-3. Lead: write the M0 tablet checklist; Basil runs it (#3, #4) and the doctor on pavillion-claw.
-4. Then M1 (#11–#17), with #19 and #21 starting as soon as #18 lands.
+1. **Basil:** build a debug APK from current `main` and publish a new pre-release (both published releases still carry the old app ID and the cleartext build), then run the M0 tablet checklist (#2, #3, #4) and the doctor on pavillion-claw.
+2. **Basil:** approve the upstream PR titles and bodies (gate G3) and start #18 (the patched branch on pavillion-claw) — it blocks #19 and the rest of the M2 critical path. Nothing has been started.
+3. Eng A (doable from a box): the app items that need a room-capable gateway or a device (#15, #26, #27, #29, #30, #31, #32).
+4. Then M1–M3 close in order once the tablet checks and #18–#21 are unblocked.
 
 ### Known risks
 
@@ -216,7 +245,8 @@ Upstream pins:
 
 | Ref | Use |
 |---|---|
-| `7bda2a33` | Renderer sync in `apps/desktop` and `apps/shared` (v0.1.1); origin citations in #36. |
+| `450ad5055e` | **Current** renderer sync in `apps/desktop` and `apps/shared` (byte-identical, verified; see docs/ARCHITECTURE.md). |
+| `7bda2a33` | The previous pin; an ancestor of `450ad5055e` with zero `apps/desktop` commits between. Origin citations in #36. |
 | `4e59ac2b` | hermes-agent main read for the contracts (#35), doctor (#37), and setup guide (#38). |
 | `acc3cada` | Named in `planning/PLAN.md`; not fetchable from the remote, so later work uses `4e59ac2b`. |
 

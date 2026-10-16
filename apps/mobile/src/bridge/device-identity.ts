@@ -55,6 +55,12 @@ export function isUuidV4(value: string): boolean {
 export function randomUuidV4(): string {
   const webCrypto = globalThis.crypto
   if (webCrypto?.randomUUID) return webCrypto.randomUUID()
+  // Round-1 finding: the randomUUID branch was optional-chained but the fallback
+  // assumed getRandomValues exists. Fail loudly rather than letting an unguarded
+  // call produce an undefined-derived id.
+  if (!webCrypto?.getRandomValues) {
+    throw new Error('no secure random source available: globalThis.crypto.getRandomValues is missing')
+  }
   const bytes = new Uint8Array(16)
   webCrypto.getRandomValues(bytes)
   bytes[6] = (bytes[6] & 0x0f) | 0x40 // version 4
@@ -116,7 +122,11 @@ export function createDeviceIdentity(
 
   async function deviceLabel(): Promise<string> {
     const { value } = await store.get({ key: DEVICE_LABEL_STORAGE })
-    if (value) return clampLabel(value)
+    // Round-1 finding: a stored label that clamps to empty (whitespace, or
+    // longer than the cap with nothing but padding) was returned as-is, giving
+    // the device a blank name. Treat it as missing and re-derive the default.
+    const stored = value ? clampLabel(value) : ''
+    if (stored) return stored
     const created = clampLabel(fallbackLabel()) || 'Hermes mobile'
     await store.set({ key: DEVICE_LABEL_STORAGE, value: created })
     return created

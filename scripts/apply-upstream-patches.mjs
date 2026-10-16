@@ -50,6 +50,13 @@ export function applyPatches(dir = DEFAULT_PATCH_DIR, { check = false, cwd = rep
       const stderr = (result.stderr || result.stdout || '').trim()
       failed.push({ file, stderr })
       log(`✗ ${name}${check ? ' (check)' : ''}: ${stderr.split('\n')[0]}`)
+      // Stop on the first failure when actually applying: continuing leaves a
+      // half-patched tree that looks like a successful run. Round-1 finding.
+      if (!check) {
+        const remaining = Math.max(0, files.length - files.indexOf(file) - 1)
+        log(`  stopped: ${remaining} later patch(es) not attempted`)
+        break
+      }
     } else {
       log(`✓ ${name}${check ? ' (check)' : ''}`)
     }
