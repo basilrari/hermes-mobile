@@ -86,7 +86,7 @@ A random `device_id` (UUID, in Capacitor Preferences) plus a label. Used only fo
 5. Patched hermes-agent branch installed with a one-command rollback (HM-18).
 
 ### 4.4 App identity
-App ID changes from `com.nousresearch.hermesagent.mobile` to `io.github.basilrari.hermesmobile` (HM-01, first issue). Android sees this as a new app, so Basil uninstalls the old APK and logs in again once.
+App ID is `io.github.basilrari.hermesmobile` (HM-01, first issue). Android sees an ID change as a new app, so Basil uninstalls the previous APK and logs in again once.
 
 ## 5. Team, tracks and interfaces
 
