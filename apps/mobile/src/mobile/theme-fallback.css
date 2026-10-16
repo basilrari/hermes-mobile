@@ -193,3 +193,25 @@ body {
     padding-right: calc(env(safe-area-inset-right) + 0.5rem) !important;
   }
 }
+
+/*
+ * HM-30/31: the titlebar status cluster (the "backend <host>" / client-version
+ * chips) is desktop chrome sized for a wide window. At 412px the harness measured
+ * one chip at right=435 in a 412 viewport — 23px past the edge, so the chip was
+ * clipped by #root's overflow rather than fitting. Let the cluster's chips shrink
+ * and truncate inside their own box at phone widths instead of overflowing; no
+ * control moves or disappears, the long host name just ellipsises like the
+ * `truncate` span already intends.
+ */
+@media (max-width: 47.5rem) {
+  div.min-w-0 > button.h-full {
+    min-width: 0;
+    overflow: hidden;
+  }
+  div.min-w-0 > button.h-full .truncate {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
