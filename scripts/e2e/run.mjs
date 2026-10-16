@@ -128,28 +128,53 @@ async function openClient(browser, profile, origin) {
 }
 
 /**
- * The steps after the token is submitted: dismiss the desktop renderer's
- * first-run onboarding if the backend says it is due, then wait for the shell.
- */
-/**
  * The layout pass (HM-30 tablet polish, HM-31 phone pass).
  *
  * "Obvious breakage" is turned into assertions that can actually fail, instead of
  * a human squinting at a screenshot:
- *   - no horizontal overflow of the document, and no element sticking out past
- *     the viewport edge by more than a pixel (the classic narrow-layout break);
- *   - the composer is present, non-zero and inside the viewport (a chat you
- *     cannot type into is broken whatever it looks like);
- *   - visible controls meet a minimum touch target (Android's own guidance is
- *     48dp; the renderer's icon buttons are smaller, so 24 CSS px is the
- *     breakage floor and anything under 32 is reported for polish).
+ *   - no horizontal overflow in any box that can actually scroll (see below);
+ *   - the composer — the BOTTOM-DOCKED input, not the first input in document
+ *     order — is present, bigger than a measurement probe and inside the
+ *     viewport (a chat you cannot type into is broken whatever it looks like);
+ *   - visible controls meet a 24 CSS px touch floor (Android's own guidance is
+ *     48dp; the renderer's icon buttons are smaller, so 24 is the breakage
+ *     floor) and anything under 32 is reported as polish.
+ *
+ * Round-2 findings (review) fixed in this version, all measured on this file:
+ *   1. the touch-floor check passed the LITERAL `true` and ran only in the
+ *      else-branch, so it could never fail and the floor carried no evidence.
+ *      It now asserts on every run, against the known debt below.
+ *   2. `documentElement.scrollWidth` is not a usable signal: #root is
+ *      `position: fixed; inset: 0; overflow: hidden`, so a 3000px child leaves
+ *      the document at the viewport width. The scrolling boxes are checked now.
+ *   3. the composer selector resolved `input[placeholder="Search sessions…"]` at
+ *      three of four viewports, and the 1x1 `textarea.sr-only` autosize probe
+ *      satisfied every condition — delete the composer and it still passed.
+ *   4. scroll-strip exemptions were collected and then thrown away, so a waiver
+ *      was invisible. They are printed now.
+ *   5. `outerHTML` was embedded in the detail, putting app markup (and any
+ *      attribute a user or host typed) into an artefact that is otherwise
+ *      "keys and sizes only". Geometry only now.
  */
 const MIN_TOUCH_PX = 24
 const POLISH_TOUCH_PX = 32
+const MAX_TOUCH_REPORT = 5
+
+/**
+ * Controls below the touch floor that are KNOWN and owned upstream (issue #55:
+ * the profile switcher's 20x20 icon buttons and the 12px-tall sidebar section
+ * rows). Pinned by label so a NEW offender turns this check red while the known
+ * renderer chrome stays visible as debt. When #55 lands, this list should empty.
+ */
+const KNOWN_UNDER_FLOOR = [
+  'button[Pinned]',
+  'button[Sessions]',
+  'button[New profile]',
+  'button[Import profile',
+]
 
 async function layoutFindings(page) {
-  return page.evaluate(({ minTouch, polishTouch }) => {
-    const doc = document.documentElement
+  return page.evaluate(({ minTouch, polishTouch, maxReport }) => {
     const vw = window.innerWidth
     const vh = window.innerHeight
     const visible = (el) => {
@@ -167,26 +192,36 @@ async function layoutFindings(page) {
       return false
     }
 
-    const overflow = []
+    // Round-2 finding: `documentElement.scrollWidth` never moves here — #root is
+    // `position: fixed; inset: 0; overflow: hidden`, so a 3000px child left the
+    // document at the viewport width. Check the boxes that can really scroll.
+    const documentOverflow = [document.documentElement, document.body, document.getElementById('root')]
+      .filter(Boolean)
+      .filter((el) => el.scrollWidth > vw + 1)
+      .map((el) => `${el.id || el.tagName.toLowerCase()}.scrollWidth=${el.scrollWidth} > ${vw}`)
+
+    const elementOverflow = []
     const scrollStrips = []
     for (const el of document.querySelectorAll('body *')) {
       if (!visible(el)) continue
       const r = el.getBoundingClientRect()
-      if (r.right > vw + 1 && r.width < vw * 4) {
-        // An element inside an intentional horizontal scroller (the mobile status
-        // bar) is SUPPOSED to sit past the edge — that is how the strip scrolls.
-        // Counting it as breakage made this check wrong, not the app. Round: HM-31.
-        if (inHorizontalScroller(el)) {
-          if (scrollStrips.length < 3) scrollStrips.push(`${el.tagName.toLowerCase()} right=${Math.round(r.right)} (scroll strip)`)
-          continue
-        }
-        const label = `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ').slice(0, 2).join('.') : ''} right=${Math.round(r.right)} w=${Math.round(r.width)} parent=${(el.parentElement?.tagName || '').toLowerCase()}.${String(el.parentElement?.className || '').split(' ').slice(0, 2).join('.')}`
-        overflow.push(`${label} :: ${el.outerHTML.slice(0, 90).replace(/\s+/g, ' ')}`)
-        if (overflow.length >= 4) break
+      if (r.right <= vw + 1 || r.width >= vw * 4) continue
+      // An element inside an intentional horizontal scroller is SUPPOSED to sit
+      // past the edge — that is how the strip scrolls. Exempt, but REPORT the
+      // exemption (round-2 finding): a waiver nobody can see is not auditable.
+      if (inHorizontalScroller(el)) {
+        if (scrollStrips.length < 3) scrollStrips.push(`${el.tagName.toLowerCase()} right=${Math.round(r.right)}`)
+        continue
       }
+      // Geometry only — never outerHTML (round-2 finding).
+      elementOverflow.push(`${el.tagName.toLowerCase()}.${String(el.className || '').split(' ').slice(0, 2).join('.')} right=${Math.round(r.right)} w=${Math.round(r.width)} parent=${(el.parentElement?.tagName || '').toLowerCase()}.${String(el.parentElement?.className || '').split(' ').slice(0, 2).join('.')}`)
+      if (elementOverflow.length >= 4) break
     }
 
-    const small = []
+    // Counted in full, reported up to a cap — the old `break` at 5 made the note
+    // read like a total when it was a cap (round-2 finding).
+    let touchTotal = 0
+    const touchOffenders = []
     for (const el of document.querySelectorAll('button, a[href], input, textarea, select, [role="button"]')) {
       if (!visible(el)) continue
       const r = el.getBoundingClientRect()
@@ -194,24 +229,37 @@ async function layoutFindings(page) {
       // control: autosize textareas and offscreen probes. Excluded explicitly.
       if (r.width * r.height <= 4) continue
       if (Math.min(r.width, r.height) < minTouch) {
-        small.push(`${el.tagName.toLowerCase()}[${(el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 24)}]=${Math.round(r.width)}x${Math.round(r.height)}`)
-        if (small.length >= 5) break
+        touchTotal += 1
+        if (touchOffenders.length < maxReport) {
+          touchOffenders.push(`${el.tagName.toLowerCase()}[${(el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 24)}]=${Math.round(r.width)}x${Math.round(r.height)}`)
+        }
       }
     }
 
-    const composer = document.querySelector('textarea, [contenteditable="true"], input[type="text"]')
-    let composerOk = false
-    let composerNote = 'no composer found'
-    if (composer && visible(composer)) {
-      const r = composer.getBoundingClientRect()
-      composerOk = r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= vw + 1 && r.bottom <= vh + 1
-      composerNote = `composer ${Math.round(r.width)}x${Math.round(r.height)} bottom=${Math.round(r.bottom)} of ${vh}`
-    }
+    // Round-2 finding: the first match in document order is NOT the composer. At
+    // three of four viewports it was the sessions search box, and the renderer's
+    // 1x1 `textarea.sr-only` autosize probe satisfied every old condition — the
+    // check passed with the composer deleted. Resolve the bottom-docked candidate
+    // with real area instead.
+    const candidates = [...document.querySelectorAll('textarea, [contenteditable="true"], input[type="text"]')]
+      .filter((el) => visible(el))
+      .map((el) => ({ el, r: el.getBoundingClientRect() }))
+      .filter(({ r }) => r.width * r.height > 4)
+      .filter(({ r }) => r.bottom >= vh - 120)
+      .sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height)
+
+    const best = candidates[0]
+    const composerOk = Boolean(best) && best.r.left >= -1 && best.r.right <= vw + 1 && best.r.bottom <= vh + 1
+    const composerNote = best
+      ? `composer ${best.el.tagName.toLowerCase()} ${Math.round(best.r.width)}x${Math.round(best.r.height)} bottom=${Math.round(best.r.bottom)} of ${vh} (${candidates.length} bottom-docked candidate(s))`
+      : 'no bottom-docked composer: nothing with real area within 120px of the bottom edge'
 
     return {
-      documentOverflow: doc.scrollWidth > vw + 1 ? `${doc.scrollWidth} > ${vw}` : null,
-      elementOverflow: overflow,
-      smallTargetsFloor: small,
+      documentOverflow,
+      elementOverflow,
+      scrollStrips,
+      touchTotal,
+      touchOffenders,
       composerOk,
       composerNote,
       viewport: `${vw}x${vh}`,
@@ -220,9 +268,13 @@ async function layoutFindings(page) {
         .map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.width, r.height) })
         .filter((v) => v > 0 && v < polishTouch).length,
     }
-  }, { minTouch: MIN_TOUCH_PX, polishTouch: POLISH_TOUCH_PX })
+  }, { minTouch: MIN_TOUCH_PX, polishTouch: POLISH_TOUCH_PX, maxReport: MAX_TOUCH_REPORT })
 }
 
+/**
+ * The steps after the token is submitted: dismiss the desktop renderer's
+ * first-run onboarding if the backend says it is due, then wait for the shell.
+ */
 async function finishSignIn(page) {
   const chooseLater = page.getByRole('button', { name: /choose a provider later/i })
   if (await chooseLater.count()) {
@@ -301,18 +353,24 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
       console.log(`    ! ${profile.name}: boot overlay still on screen against the mock gateway`)
     }
     const layout = await layoutFindings(page)
-    check(`${profile.name}: no horizontal overflow`, layout.documentOverflow === null && layout.elementOverflow.length === 0,
-      layout.documentOverflow ?? (layout.elementOverflow.length ? layout.elementOverflow.join(' | ') : `viewport ${layout.viewport}`))
+    check(`${profile.name}: no horizontal overflow in any scrollable box`, layout.documentOverflow.length === 0 && layout.elementOverflow.length === 0,
+      [...layout.documentOverflow, ...layout.elementOverflow].join(' | ') || `all boxes within viewport ${layout.viewport}`)
+    if (layout.scrollStrips.length) {
+      note(`${profile.name}: ${layout.scrollStrips.length} element(s) exempted inside a horizontal scroller — ${layout.scrollStrips.join(' | ')}`)
+    }
     check(`${profile.name}: composer visible inside the viewport`, layout.composerOk, layout.composerNote)
-    // Reported, not failed. The offenders are the renderer's OWN desktop chrome
-    // (the profile switcher's 20x20 icon buttons, and sidebar section rows 12px
-    // tall) — a mouse-sized control, not a break in the mobile layout, and a
-    // mobile-only CSS override keyed on an i18n'd aria-label would be fragile.
-    // Filed upstream instead. Round: HM-31.
-    if (layout.smallTargetsFloor.length) {
-      note(`${profile.name}: ${layout.smallTargetsFloor.length} control(s) under the ${MIN_TOUCH_PX}px touch floor — renderer chrome, upstream issue: ${layout.smallTargetsFloor.join(' | ')}`)
-    } else {
-      check(`${profile.name}: controls meet the touch-target floor (${MIN_TOUCH_PX}px)`, true, 'all visible controls >= floor')
+    // Asserts on EVERY run (round-2 finding: the old version passed the literal
+    // `true` in an else-branch, so it could only run when nothing was wrong and
+    // reported success unconditionally). Known renderer chrome under the floor is
+    // pinned in KNOWN_UNDER_FLOOR (issue #55) so THIS check cannot go quiet: any
+    // offender that is not the known debt fails it.
+    const unexpected = layout.touchOffenders.filter((o) => !KNOWN_UNDER_FLOOR.some((known) => o.startsWith(known)))
+    const touchDetail = layout.touchTotal === 0
+      ? 'all visible controls >= floor'
+      : `${layout.touchTotal >= MAX_TOUCH_REPORT ? '>=' : ''}${layout.touchTotal} under the ${MIN_TOUCH_PX}px floor${unexpected.length ? ` — NEW: ${unexpected.join(' | ')}` : ` — all known debt (#55): ${layout.touchOffenders.join(' | ')}`}`
+    check(`${profile.name}: no NEW control under the ${MIN_TOUCH_PX}px touch floor`, unexpected.length === 0, touchDetail)
+    if (layout.polishTargets > 0) {
+      note(`${profile.name}: ${layout.polishTargets} control(s) under ${POLISH_TOUCH_PX}px — polish list, not breakage`)
     }
     await page.screenshot({ path: path.join(shotDir, `${profile.name}-03-app.png`) })
 
