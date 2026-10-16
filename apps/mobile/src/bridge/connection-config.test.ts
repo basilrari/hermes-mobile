@@ -12,10 +12,26 @@ import {
 
 describe('normalizeRemoteBaseUrl', () => {
   it('strips trailing slash, hash, and query', () => {
-    expect(normalizeRemoteBaseUrl('http://gw:9119/?x=1#h')).toBe('http://gw:9119')
+    expect(normalizeRemoteBaseUrl('https://gw:9119/?x=1#h')).toBe('https://gw:9119')
   })
-  it('rejects non-http(s) schemes', () => {
-    expect(() => normalizeRemoteBaseUrl('ftp://gw')).toThrow()
+  it('rejects http://', () => {
+    expect(() => normalizeRemoteBaseUrl('http://gw:9119')).toThrow(
+      'Gateway URL must use https://. http:// and ws:// are not allowed.',
+    )
+  })
+  it('rejects ws://', () => {
+    expect(() => normalizeRemoteBaseUrl('ws://gw:9119/api/ws')).toThrow(
+      'Gateway URL must use https://. http:// and ws:// are not allowed.',
+    )
+  })
+  it('accepts https://', () => {
+    expect(normalizeRemoteBaseUrl('https://gw:9119')).toBe('https://gw:9119')
+  })
+  it('accepts wss://', () => {
+    expect(normalizeRemoteBaseUrl('wss://gw:9119')).toBe('https://gw:9119')
+  })
+  it('rejects other non-https schemes', () => {
+    expect(() => normalizeRemoteBaseUrl('ftp://gw')).toThrow(/https:\/\//)
   })
   it('rejects an empty URL', () => {
     expect(() => normalizeRemoteBaseUrl('')).toThrow()
@@ -37,8 +53,12 @@ describe('ws url builders', () => {
   it('token mode embeds an (encoded) ?token=', () => {
     expect(buildGatewayWsUrl('http://gw:9119', 'tok en')).toBe('ws://gw:9119/api/ws?token=tok%20en')
   })
-  it('https base → wss scheme', () => {
+  it('derives wss:// from an https:// base', () => {
     expect(buildGatewayWsUrl('https://gw', 'x')).toBe('wss://gw/api/ws?token=x')
+    expect(buildGatewayWsUrl('https://gw:9119', 'x')).toBe('wss://gw:9119/api/ws?token=x')
+    expect(buildGatewayWsUrlWithTicket('https://gw:9119', 'abc')).toBe(
+      'wss://gw:9119/api/ws?ticket=abc',
+    )
   })
   it('oauth mode embeds ?ticket=', () => {
     expect(buildGatewayWsUrlWithTicket('http://gw:9119', 'abc')).toBe('ws://gw:9119/api/ws?ticket=abc')

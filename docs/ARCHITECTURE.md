@@ -2,7 +2,7 @@
 
 ```
 ┌──────────── Android device ────────────┐          ┌──────── your host ────────┐
-│ Capacitor WebView (origin http://localhost)        │                           │
+│ Capacitor WebView (origin https://localhost)       │                           │
 │  ┌──────────────────────────────────┐  │  HTTP    │  Hermes gateway/dashboard │
 │  │ Desktop renderer (apps/desktop/src)│ ├─────────►│  /api/status, /auth/*,    │
 │  │  unmodified React UI              │  │ (native  │  /api/auth/ws-ticket, …   │
@@ -45,9 +45,8 @@ connect flow until a target is saved, then mounts the Desktop renderer.
 
 - `vite.config.ts` aliases `@` → `../desktop/src` and `@hermes/shared` → `../shared/src`, so
   the desktop components compile into the mobile bundle without being copied or forked.
-- `capacitor.config.ts`: `webDir: dist`, CapacitorHttp enabled, `androidScheme: 'http'` plus
-  cleartext. These are needed because the chat socket is `ws://` to a LAN/Tailscale host, which
-  an `https://localhost` origin would block as mixed content.
+- `capacitor.config.ts`: `webDir: dist`, CapacitorHttp enabled, `androidScheme: 'https'`.
+  Cleartext is off. The WebView origin is `https://localhost`.
 - The Android project lives in `apps/mobile/android`, a standard Capacitor 8 Gradle project.
 
 ## Scope and what's left out of this repo
