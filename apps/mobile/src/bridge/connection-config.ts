@@ -27,7 +27,7 @@ export const RT_COOKIE_VARIANTS = [
   'hermes_session_rt',
 ]
 
-/** Normalize a user-entered gateway URL: require http(s), strip hash/query and
+/** Normalize a user-entered gateway URL: require https, strip hash/query and
  *  trailing slashes. Throws on invalid input (surfaced on the connect screen). */
 export function normalizeRemoteBaseUrl(rawUrl: string): string {
   const value = String(rawUrl || '').trim()
@@ -40,8 +40,8 @@ export function normalizeRemoteBaseUrl(rawUrl: string): string {
     throw new Error(`Gateway URL is not valid: ${(error as Error).message}`)
   }
 
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Gateway URL must be http:// or https://, got ${parsed.protocol}`)
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Gateway URL must use https://. http:// and ws:// are not allowed.')
   }
 
   parsed.hash = ''

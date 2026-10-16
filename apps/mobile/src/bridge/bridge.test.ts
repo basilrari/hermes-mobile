@@ -138,7 +138,7 @@ describe('probeGateway', () => {
       .mockResolvedValueOnce(
         ok({ providers: [{ name: 'google', display_name: 'Google', supports_password: false }] }),
       ) // /api/auth/providers
-    const p = await probeGateway('http://gw:9119')
+    const p = await probeGateway('https://gw:9119')
     expect(p.authMode).toBe('oauth')
     expect(p.needsLogin).toBe(true)
     expect(p.providers).toEqual([{ name: 'google', displayName: 'Google', supportsPassword: false }])
@@ -146,7 +146,7 @@ describe('probeGateway', () => {
 
   it('classifies an open gateway as token with no providers', async () => {
     httpSpy.mockResolvedValueOnce(ok({ auth_required: false, version: '0.17.0' }))
-    const p = await probeGateway('http://gw:9119')
+    const p = await probeGateway('https://gw:9119')
     expect(p.authMode).toBe('token')
     expect(p.providers).toEqual([])
   })

@@ -2,7 +2,7 @@
 
 An Android thin client for [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 It's a [Capacitor](https://capacitorjs.com) app that runs the **unmodified Hermes Desktop renderer**
-in a WebView and talks to a **remote Hermes gateway** over HTTP and WebSocket. That's the same
+in a WebView and talks to a **remote Hermes gateway** over HTTPS and WSS. That's the same
 "Remote gateway" path the desktop app uses. The phone runs no agent, model or tools. Everything
 runs on your gateway.
 
@@ -51,10 +51,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## Connecting to a gateway
 
-1. On the machine that runs Hermes, start the gateway or dashboard so it listens on an address your
-   phone can reach. Port 9119 is the default the app assumes in examples. Bind it to the LAN or
-   Tailscale interface, not only `127.0.0.1`.
-2. In the app, enter the gateway URL, for example `http://100.101.102.103:9119` or `http://my-box.tailnet-name.ts.net:9119`.
+1. On the machine that runs Hermes, publish the dashboard with `tailscale serve` so the phone
+   reaches it at an `https://….ts.net` URL. The app refuses `http://` and `ws://`.
+2. In the app, enter that gateway URL, for example `https://my-box.tailnet-name.ts.net`.
 3. The app probes `GET /api/status` and picks the auth mode:
    - **Token gateway**: paste the gateway's session token. You enter it at runtime and it's stored
      only on the device (Capacitor Preferences). It's never built into the APK.
@@ -63,16 +62,15 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### Recommended: Tailscale
 
-Put both the gateway host and the phone on the same tailnet and use the host's `100.x` IP or
-MagicDNS name. Traffic is end-to-end encrypted by WireGuard, and the gateway isn't exposed to the
-internet. **Don't port-forward a plain-HTTP gateway to the public internet.**
-
-The app allows cleartext `http://`/`ws://` so it works with LAN and Tailscale hosts
-(`network_security_config.xml`, `androidScheme: 'http'`). If you put the gateway behind TLS
-(for example `tailscale serve` → `https://…ts.net`), you can switch `androidScheme` back to
-`https` and turn off cleartext.
+Put both the gateway host and the phone on the same tailnet and publish the dashboard with
+`tailscale serve`. **Don't port-forward the gateway to the public internet.**
 
 ## Security notes
 
 - The repo contains no secrets. Tokens and passwords are entered at runtime only.
 - The debug APK is signed with the standard Android debug key. Don't distribute it as a production build.
+- `androidScheme` is `https`, so the WebView origin is `https://localhost` instead of `http://localhost`.
+  That origin change wipes WebView-stored login. The one-time reinstall above already removes the
+  previous app's data, so the scheme change does not need a separate migration.
+- Android cleartext is off: `usesCleartextTraffic="false"` and `cleartextTrafficPermitted="false"`,
+  with no cleartext domain exceptions. The connect screen rejects `http://` and `ws://` URLs.
