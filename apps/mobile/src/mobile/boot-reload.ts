@@ -11,12 +11,15 @@
  * path (round 10).
  *
  * So: reload now if the app is visible, otherwise wait for the next
- * `visibilitychange` that reports visible. The wait is bounded rather than open
- * (`HIDDEN_RELOAD_FALLBACK_MS`): the fallback fires whether the signal is
- * missing or the app is simply still hidden, because a boot parked on the cover
- * with nothing scheduled is worse than the one dial it costs. Returns an
- * unsubscribe for the waiter; the caller must use it if the boot recovers by
- * another route.
+ * `visibilitychange` that reports visible. The wait is bounded, and the bound
+ * does NOT reload blind — a reload while hidden is the defect above, on a clock
+ * instead of on a signal. At `timeoutMs` the waiter reports the stall through
+ * `onTimeout` (the caller drops its "Reconnecting…" cover and the manual failure
+ * screen takes over) and stays armed for the visible edge. That closes the dead
+ * end — a boot parked on a cover with nothing scheduled — without a hidden dial.
+ *
+ * Returns an unsubscribe for the waiter; the caller must use it if the boot
+ * recovers by another route.
  *
  * `document.visibilityState` is the signal `@capacitor/app`'s own web
  * implementation maps to `appStateChange`, so this module reads the same truth
@@ -27,14 +30,21 @@ export interface ReloadWindow {
   location: Pick<Location, 'reload'>
 }
 
-const noop = (): void => {}
+export interface ReloadOptions {
+  /** How long to wait hidden before reporting the stall, in ms. */
+  timeoutMs?: number
+  /** Called once when the wait exceeds `timeoutMs`. The reload stays armed. */
+  onTimeout?: () => void
+}
 
-/** Upper bound on the deferred wait, in ms, before reloading anyway. */
-export const HIDDEN_RELOAD_FALLBACK_MS = 60_000
+/** Default bound on the deferred wait, in ms. */
+export const HIDDEN_RELOAD_TIMEOUT_MS = 60_000
+
+const noop = (): void => {}
 
 export function reloadWhenVisible(
   win: ReloadWindow = window as unknown as ReloadWindow,
-  fallbackMs: number = HIDDEN_RELOAD_FALLBACK_MS,
+  { timeoutMs = HIDDEN_RELOAD_TIMEOUT_MS, onTimeout }: ReloadOptions = {},
 ): () => void {
   if (win.document.visibilityState === 'visible') {
     win.location.reload()
@@ -43,8 +53,6 @@ export function reloadWhenVisible(
 
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  // One exit path for both the visible edge and the fallback: drop the listener,
-  // drop the timer, reload once.
   const stop = (): void => {
     win.document.removeEventListener('visibilitychange', onVisible)
     if (timer !== undefined) clearTimeout(timer)
@@ -60,11 +68,12 @@ export function reloadWhenVisible(
     reload()
   }
   win.document.addEventListener('visibilitychange', onVisible)
-  // Bounded fallback: an open-ended wait leaves the boot stuck behind the
-  // "Reconnecting…" cover with its retry budget unspent and nothing scheduled if
-  // the platform never reports visible (a WebView that does not flip
-  // `visibilityState` on resume, an OEM launcher). One dial after a minute is the
-  // cheaper failure — the same dial this branch already accepts elsewhere (round 11).
-  timer = setTimeout(reload, fallbackMs)
+
+  // Report the stall; do not reload. A reload here is the hidden dial this module
+  // exists to prevent (round 12), so the waiter stays armed for the visible edge.
+  timer = setTimeout(() => {
+    timer = undefined
+    onTimeout?.()
+  }, timeoutMs)
   return stop
 }

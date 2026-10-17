@@ -69,42 +69,54 @@ describe('reloadWhenVisible (HM-32)', () => {
     expect(fake.reload).not.toHaveBeenCalled()
   })
 
-  it('reloads anyway after the bounded fallback, so a lost visibility signal cannot park the boot', () => {
+  it('reports the stall after the bound instead of reloading blind while hidden', () => {
+    // A reload here would rerun the bridge with the suspend gate at `false` and
+    // dial, mint a ticket and hold that socket for the rest of the hidden window.
     vi.useFakeTimers()
     try {
       const fake = fakeWindow('hidden')
-      reloadWhenVisible(fake.win, 60_000)
+      const onTimeout = vi.fn()
+      reloadWhenVisible(fake.win, { timeoutMs: 60_000, onTimeout })
 
       vi.advanceTimersByTime(59_999)
-      expect(fake.reload).not.toHaveBeenCalled()
+      expect(onTimeout).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(1)
+      expect(onTimeout).toHaveBeenCalledTimes(1)
+      expect(fake.reload).not.toHaveBeenCalled()
+      // Still armed for the visible edge — the stall report is not a give-up.
+      expect(fake.listenerCount()).toBe(1)
+
+      vi.advanceTimersByTime(120_000)
+      expect(onTimeout).toHaveBeenCalledTimes(1)
+      expect(fake.reload).not.toHaveBeenCalled()
+
+      fake.show('visible')
       expect(fake.reload).toHaveBeenCalledTimes(1)
       expect(fake.listenerCount()).toBe(0)
-
-      // No second reload from a late visible edge or a repeated tick.
-      fake.show('visible')
-      vi.advanceTimersByTime(120_000)
-      expect(fake.reload).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('clears the fallback timer when the visible edge wins, or when cancelled', () => {
+  it('clears the bound when the visible edge wins, or when cancelled', () => {
     vi.useFakeTimers()
     try {
       const shown = fakeWindow('hidden')
-      reloadWhenVisible(shown.win, 60_000)
+      const shownTimeout = vi.fn()
+      reloadWhenVisible(shown.win, { timeoutMs: 60_000, onTimeout: shownTimeout })
       shown.show('visible')
       expect(shown.reload).toHaveBeenCalledTimes(1)
 
       const cancelled = fakeWindow('hidden')
-      reloadWhenVisible(cancelled.win, 60_000)()
+      const cancelledTimeout = vi.fn()
+      reloadWhenVisible(cancelled.win, { timeoutMs: 60_000, onTimeout: cancelledTimeout })()
 
       vi.advanceTimersByTime(120_000)
       expect(shown.reload).toHaveBeenCalledTimes(1)
+      expect(shownTimeout).not.toHaveBeenCalled()
       expect(cancelled.reload).not.toHaveBeenCalled()
+      expect(cancelledTimeout).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
