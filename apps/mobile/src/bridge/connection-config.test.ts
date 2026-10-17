@@ -6,6 +6,7 @@ import {
   buildGatewayWsUrl,
   buildGatewayWsUrlWithTicket,
   connectionScopeKey,
+  isGatewayWsUrl,
   normalizeRemoteBaseUrl,
   pathWithProfileQuery,
 } from './connection-config'
@@ -66,6 +67,29 @@ describe('ws url builders', () => {
   })
   it('honors a base path prefix', () => {
     expect(buildGatewayWsUrl('http://gw/hermes', 't')).toBe('ws://gw/hermes/api/ws?token=t')
+  })
+})
+
+describe('isGatewayWsUrl', () => {
+  // Feed the predicate what the builders actually emit, not a literal. Every hop
+  // that decides *whether the control runs at all* — the suspend close, the
+  // constructor close, the toast dismissal — hangs off this test: if a builder's
+  // route or prefix shape stops ending in `/api/ws`, this fails. Hand-written
+  // literals elsewhere would keep the suite green with all three as no-ops
+  // (round 22 W2).
+  it('accepts the URL both builders produce, for a bare host and a prefixed base', () => {
+    for (const base of ['https://gw:9119', 'https://gw', 'https://gw/hermes', 'https://gw/hermes/']) {
+      expect(isGatewayWsUrl(buildGatewayWsUrl(base, 'tok'))).toBe(true)
+      expect(isGatewayWsUrl(buildGatewayWsUrlWithTicket(base, 'tick'))).toBe(true)
+    }
+  })
+
+  it('rejects the sibling streams the wrapper must not force-close', () => {
+    expect(isGatewayWsUrl('wss://gw/api/display/ws?ticket=d')).toBe(false)
+    expect(isGatewayWsUrl('wss://gw/api/plugins/bots/events?token=x')).toBe(false)
+    expect(isGatewayWsUrl('wss://gw/api/audio/transcribe-stream')).toBe(false)
+    expect(isGatewayWsUrl(null)).toBe(false)
+    expect(isGatewayWsUrl('not a url')).toBe(false)
   })
 })
 

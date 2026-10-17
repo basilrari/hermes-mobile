@@ -84,13 +84,18 @@ if (effective === undefined) {
   process.exit(1)
 }
 
-// `CapConfig.java:295` lowercases before its switch, so 'NONE' is the same off
-// value — but only a STRING can be that value. `JSONUtils.getString` calls
-// `JSONObject.getString`, which THROWS on a non-string member; the catch returns the
-// default it was handed. For the top-level key that default is
-// `LOG_BEHAVIOR_DEBUG` → `isDebug` → logging ON in a debuggable APK, so a non-string
-// value is exactly the shape that turns logging on while reading like "not
-// production" (rounds 16, 20). Coercing it here would certify that.
+// `CapConfig.java` lowercases before its switch, so 'NONE' is the same off
+// value — but only a STRING can be that value. The platform (AOSP `libcore`)
+// `JSONObject.getString` does NOT throw on a non-string member: it stringifies it
+// through `JSON.toString` (`String.valueOf`), so `["none"]` reaches the switch as
+// the string `["none"]`, misses every case and lands on
+// `default: loggingEnabled = isDebug` — ON in a debuggable APK. That holds for the
+// nested key too: the default it would fall back to is the eagerly evaluated
+// top-level value, and `JSONUtils.getString` returns the non-null string unchanged
+// (`util/JSONUtils.java`); only a missing key returns that default. A `getString`
+// that throws on a non-string is the `org.json:json` artifact Capacitor declares
+// `testImplementation` only, not the `org.json` the APK runs (round 22 W1).
+// Coercing here would certify it (round 16).
 if (typeof effective !== 'string' || effective.toLowerCase() !== SAFE_BEHAVIOR) {
   console.error(
     `capacitor config check: the synced config resolves ${effectiveKey}=${JSON.stringify(effective)}.\n` +

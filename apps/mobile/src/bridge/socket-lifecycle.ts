@@ -4,8 +4,9 @@
  * Android keeps a hidden WebView's sockets open, and an open socket counts as
  * network activity: the radio stays busy and the process stays warm while the
  * user is not looking at the app. The renderer owns the socket. This module
- * closes tracked sockets on the way out, and closes any the renderer opens
- * while the app is still hidden. The client dials on close, not on resume
+ * closes tracked GATEWAY sockets on the way out, and closes a gateway socket the
+ * renderer opens while the app is still hidden. The client dials on close, not on
+ * resume
  * (`scheduleReconnect` in the vendored boot hook), so a flag that is only read
  * on the way out leaves the new socket up until the next background edge.
  *

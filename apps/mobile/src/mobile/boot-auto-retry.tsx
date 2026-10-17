@@ -7,7 +7,9 @@
  * with the failure screen, quietly reload-retry up to twice behind a
  * "Reconnecting…" cover; only after that does the manual BootFailureOverlay take
  * over. The counter lives in sessionStorage so it survives the reload, and is
- * cleared once the gateway connects.
+ * cleared on the connection edge (`running: false`), not on mount — a mount is
+ * `running: true`, i.e. a boot in progress, and clearing there made the bound
+ * unreachable across reloads (round 22 W4).
  *
  * The cover is z-1500 and the recovery overlay is z-1400 (`styles.css`
  * `--z-setup`), so while this is mounted the manual surface is hidden. That is why
@@ -38,8 +40,16 @@ export function BootAutoRetry() {
   const cancelReload = useRef<null | (() => void)>(null)
 
   useEffect(() => {
-    if (boot.running && !boot.error) {
+    if (!boot.running && !boot.error) {
+      // The connection edge — `completeDesktopBoot` is what sets `running: false` —
+      // and the only place the reload budget is refunded. `$desktopBoot` starts
+      // `running: true`, so clearing it on `running && !error` ran *before* the boot
+      // had failed: the counter a reload landed with was wiped, the next failure
+      // wrote `1` again, and `tries >= MAX_TRIES` was unreachable (round 22 W4).
       window.sessionStorage.removeItem(RETRY_KEY)
+    }
+
+    if (boot.running && !boot.error) {
       // A boot that recovered by another route leaves this cover mounted over a
       // working app unless it is dropped here: the reload never fires, so the
       // cleanup below only cancels the waiter. The cover is z-1500 and the app

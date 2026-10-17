@@ -90,10 +90,12 @@ describe('scripts/check-capacitor-config.mjs (HM-32)', () => {
     expect(run('{"loggingBehavior":"NONE"}', 'upper-none.json').status).toBe(0)
   })
 
-  it('fails on a non-string value, which Capacitor resolves to its default', () => {
-    // `JSONUtils.getString` throws on a non-string member and its catch returns the
-    // default — for the top-level key that is 'debug' → `isDebug` → logging on in a
-    // debuggable APK. A coerced 'none' here would certify that (rounds 16, 20).
+  it('fails on a non-string value, which Capacitor stringifies away from the safe case', () => {
+    // The platform `JSONObject.getString` stringifies the member (`JSON.toString` →
+    // `String.valueOf`), so `["none"]` reaches the switch as the string `["none"]`,
+    // misses 'none' and lands on `default: isDebug` — on in a debug APK. Coercing it
+    // here would certify that (rounds 16, 22). It is the `org.json:json` artifact that
+    // throws on that shape, and Capacitor declares it `testImplementation` only.
     expect(run('{"loggingBehavior":["none"]}', 'array-value.json').status).toBe(1)
   })
 

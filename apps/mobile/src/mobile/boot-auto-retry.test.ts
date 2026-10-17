@@ -115,4 +115,23 @@ describe('BootAutoRetry (HM-32)', () => {
     })
     expect(coverText()).toBeNull()
   })
+
+  it('keeps the budget a reload landed with until the boot completes (round 22 W4)', async () => {
+    const boot = await import('@/store/boot')
+    window.sessionStorage.setItem('hermes-boot-retries', '1')
+
+    // A cold mount is `running: true, error: null` — a boot in progress, not a
+    // connection. Clearing there ran before this boot had a chance to fail, so the
+    // counter the reload landed with was wiped and `tries >= MAX_TRIES` was
+    // unreachable across reloads.
+    boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: null, running: true })
+    render(createElement(BootAutoRetry))
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('1')
+
+    // The connection edge (`completeDesktopBoot`: `running: false`) refunds it.
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: null, running: false })
+    })
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBeNull()
+  })
 })
