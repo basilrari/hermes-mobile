@@ -86,6 +86,10 @@ describe('scripts/check-capacitor-config.mjs (HM-32)', () => {
     expect(run('{"loggingBehavior":"none","android":{"loggingBehavior":"production"}}', 'both-leaky.json').status).toBe(1)
   })
 
+  it("accepts 'NONE' in any case, because CapConfig lowercases before its switch", () => {
+    expect(run('{"loggingBehavior":"NONE"}', 'upper-none.json').status).toBe(0)
+  })
+
   it('fails closed on a value it does not recognise', () => {
     expect(run('{"android":{"loggingBehavior":"verbose"}}', 'unknown.json').status).toBe(1)
   })

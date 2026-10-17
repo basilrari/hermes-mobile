@@ -59,10 +59,14 @@ const observers = new Set<Observer>()
 /**
  * Owner: `MobileBehaviors` (`apps/mobile/src/mobile/mobile-behaviors.tsx`). It
  * is the only caller of `setSuspended`, driven by Capacitor `appStateChange`,
- * and it clears the flag on mount and unmount as well as on resume: the auth
- * path (401 → `requireReauth`) unmounts that component while the app is hidden,
- * and `AppPlugin` does not replay `isActive: true` to the listener the next
- * mount registers. A flag left set gates every dial on a visible app.
+ * and it clears the flag on MOUNT (and on `appStateChange(true)`): the auth path
+ * (401 → `requireReauth`) unmounts that component while the app is hidden, and
+ * `AppPlugin` does not replay `isActive: true` to the listener the next mount
+ * registers, so a flag left set would gate every dial on a visible app. It is
+ * deliberately NOT cleared on unmount: that unmount happens in the background,
+ * and the resolver outlives the component (`store/profile.ts`, `api/plugins.ts`,
+ * `store/gateway.ts`), so opening the gate there would let a dial mint a ticket
+ * behind a screen nobody is looking at (round 14).
  */
 let suspended = false
 /** One `console.warn` per window-less install, so a missing constructor is not spam. */

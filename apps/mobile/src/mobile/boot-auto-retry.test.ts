@@ -19,6 +19,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { resetSocketLifecycleForTests, setSuspended } from '~bridge/socket-lifecycle'
 import { HIDDEN_RELOAD_TIMEOUT_MS } from '~mobile/boot-reload'
 
 import { BootAutoRetry } from './boot-auto-retry'
@@ -54,6 +55,8 @@ describe('BootAutoRetry (HM-32)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     window.sessionStorage.clear()
+    resetSocketLifecycleForTests()
+    setSuspended(true) // hidden, as the gate sees it
     setVisibility('hidden')
   })
 
@@ -61,8 +64,11 @@ describe('BootAutoRetry (HM-32)', () => {
     cleanup()
     vi.useRealTimers()
     window.sessionStorage.clear()
-    // Restore the prototype accessor so other suites see a real visibilityState.
+    // Drop the own accessor this suite defined, then restore the prototype's, so
+    // other suites see a real visibilityState (round 15).
+    delete (document as unknown as { visibilityState?: unknown }).visibilityState
     if (originalVisibility) Object.defineProperty(Document.prototype, 'visibilityState', originalVisibility)
+    setSuspended(false)
     const boot = await import('@/store/boot')
     boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: null, running: true })
   })

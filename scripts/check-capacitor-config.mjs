@@ -84,7 +84,8 @@ if (effective === undefined) {
   process.exit(1)
 }
 
-if (String(effective) !== SAFE_BEHAVIOR) {
+// `CapConfig.java:295` lowercases before its switch, so 'NONE' is the same off value.
+if (String(effective).toLowerCase() !== SAFE_BEHAVIOR) {
   console.error(
     `capacitor config check: the synced config resolves ${effectiveKey}=${JSON.stringify(effective)}.\n` +
       `On a debug APK only '${SAFE_BEHAVIOR}' leaves bridge logging off ('debug' sets loggingEnabled =\n` +

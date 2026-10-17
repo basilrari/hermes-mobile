@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { resetSocketLifecycleForTests, setSuspended } from '~bridge/socket-lifecycle'
 
 import { reloadWhenVisible, type ReloadWindow } from './boot-reload'
 
@@ -29,6 +31,8 @@ function fakeWindow(visibility: DocumentVisibilityState) {
 }
 
 describe('reloadWhenVisible (HM-32)', () => {
+  beforeEach(() => resetSocketLifecycleForTests())
+
   it('reloads at once while the app is on screen, and registers nothing', () => {
     const fake = fakeWindow('visible')
     const cancel = reloadWhenVisible(fake.win)
@@ -120,5 +124,28 @@ describe('reloadWhenVisible (HM-32)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not reload on the WebView word alone if the suspend gate disagrees', () => {
+    // On Android the two signals come from different places (visibilityState from
+    // the WebView, the flag from the activity), so the flag has the last word: a
+    // reload here would rerun the bridge with the gate `false` and dial.
+    const fake = fakeWindow('visible')
+    setSuspended(true)
+
+    const cancel = reloadWhenVisible(fake.win)
+    expect(fake.reload).not.toHaveBeenCalled()
+    expect(fake.listenerCount()).toBe(1)
+
+    // Still backgrounded per the gate, even with a visible edge.
+    fake.show('visible')
+    expect(fake.reload).not.toHaveBeenCalled()
+
+    // The gate opens (the activity resumed): the armed waiter reloads once.
+    setSuspended(false)
+    fake.show('visible')
+    expect(fake.reload).toHaveBeenCalledTimes(1)
+    expect(fake.listenerCount()).toBe(0)
+    cancel()
   })
 })

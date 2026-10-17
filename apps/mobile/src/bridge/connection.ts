@@ -64,8 +64,9 @@ export async function getGatewayWsUrl(): Promise<string> {
   // Failing here is the mobile-owned gate (no vendored patch): the ladder gets
   // no ticket and no URL, so it cannot dial. Nothing in this file clears the
   // flag — `mobile-behaviors.tsx` owns `appStateChange` and calls
-  // `setSuspended(false)` on resume, on mount and on unmount, after which the
-  // next attempt resolves normally (measured: 3ms after `visibilitychange`).
+  // `setSuspended(false)` on resume and on mount (never on unmount: that happens
+  // in the background), after which the next attempt resolves normally
+  // (measured: 3ms after `visibilitychange`).
   // The refusal is recorded as well as thrown: this is the only place that knows
   // the dial was suppressed, and the boot hook's retry decision only sees the
   // failure (`getBootProgress().retryable` in stubs.ts).

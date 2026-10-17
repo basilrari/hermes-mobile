@@ -21,10 +21,16 @@
  * Returns an unsubscribe for the waiter; the caller must use it if the boot
  * recovers by another route.
  *
- * `document.visibilityState` is the signal `@capacitor/app`'s own web
- * implementation maps to `appStateChange`, so this module reads the same truth
- * the rest of the branch does.
+ * `document.visibilityState` is the WebView's own signal, and on Android the
+ * suspend flag comes from a different place — the activity
+ * (`BridgeActivity.onStop/onResume` → `AppPlugin` → `appStateChange`). They are
+ * two truths and can disagree at an edge, so the flag has the last word: a page
+ * the WebView calls visible while the gate says backgrounded does not reload
+ * (round 15). Reloading there would rerun the bridge with the gate `false` and
+ * dial in the background, which is the defect this module prevents.
  */
+import { isSuspended } from '~bridge/socket-lifecycle'
+
 export interface ReloadWindow {
   document: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>
   location: Pick<Location, 'reload'>
@@ -46,7 +52,10 @@ export function reloadWhenVisible(
   win: ReloadWindow = window as unknown as ReloadWindow,
   { timeoutMs = HIDDEN_RELOAD_TIMEOUT_MS, onTimeout }: ReloadOptions = {},
 ): () => void {
-  if (win.document.visibilityState === 'visible') {
+  /** On screen = the page is visible AND the suspend gate agrees. */
+  const onScreen = (): boolean => win.document.visibilityState === 'visible' && !isSuspended()
+
+  if (onScreen()) {
     win.location.reload()
     return noop
   }
@@ -64,7 +73,7 @@ export function reloadWhenVisible(
   }
 
   const onVisible = (): void => {
-    if (win.document.visibilityState !== 'visible') return
+    if (!onScreen()) return
     reload()
   }
   win.document.addEventListener('visibilitychange', onVisible)
