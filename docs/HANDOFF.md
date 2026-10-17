@@ -199,7 +199,7 @@ Gate G0 was passed at #35, so M2 contract-dependent work (#19, #21, #22, #25) ma
 
 Closed: #1, #5, #6, #7, #8, #9, #10, #11, #12, #13, #14, #16, #25, #30, #31. #2 is still open even though #36 merged; close it after Basil's checklist confirms HTTPS login on the tablet.
 
-Still open (21, `gh issue list --state open`, measured 2026-10-17): #2, #3, #4, #15, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #28, #29, #32, #33, #52, #55, #57. Of those, the tablet still owns **#2**, #3, #4; pavillion-claw owns #17, #18, #28; a room-capable gateway or a device still owns #15, #26, #27, #29, #32; upstream is #19–#24 and #33; #55 (HM-35) and #57 (HM-34) are layout follow-ups; #52 is this pull request. Issue number N is HM-N except those two.
+Still open (20, `gh issue list --state open`, measured 2026-10-17): #2, #3, #4, #15, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #28, #29, #32, #33, #52, #57. Of those, the tablet still owns **#2**, #3, #4; pavillion-claw owns #17, #18, #28; a room-capable gateway or a device still owns #15, #26, #27, #29, #32; upstream is #19–#24 and #33; #57 (HM-34) is a layout follow-up; #52 is this pull request. Issue number N is HM-N except those two.
 
 ## 8. Order of work and critical path
 
@@ -223,7 +223,7 @@ Next steps, in order — **the first two are Basil's; nothing in this repo can d
 
 1. **Basil:** build a debug APK from current `main` and publish a new pre-release (both published releases still carry the old app ID and the cleartext build), then run the M0 tablet checklist (#2, #3, #4) and the doctor on pavillion-claw.
 2. **Basil:** approve the upstream PR titles and bodies (gate G3) and start #18 (the patched branch on pavillion-claw) — it blocks #19 and the rest of the M2 critical path. Nothing has been started.
-3. Eng A: #55 and #57 are the layout follow-ups a box can do. #15, #26, #27, #29, and #32 still need a room-capable gateway or a device.
+3. Eng A: #57 is the layout follow-up a box can do. #15, #26, #27, #29, and #32 still need a room-capable gateway or a device.
 4. Then M1–M3 close in order once the tablet checks and #18–#21 are unblocked.
 
 ### Known risks
