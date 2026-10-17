@@ -174,4 +174,27 @@ describe('the connection-lost toast is dismissed only on recovery (HM-32)', () =
     expect($notifications.get()).toEqual([])
     view.unmount()
   })
+
+  it('leaves a toast raised on a visible app alone once the window is spent', () => {
+    const { win } = lifecycleWindow()
+    installSocketLifecycle(win as never)
+    const view = mount()
+    const Socket = win.WebSocket as unknown as new (url: string) => { fire: (t: string) => void }
+
+    // First hidden window: the escalation fires while hidden, then the connection
+    // recovers. The stale toast is dropped and the window is spent.
+    act(() => appState()({ isActive: false }))
+    raiseLossAlert()
+    act(() => new Socket('wss://gw.example/ws').fire('open'))
+    expect($notifications.get()).toEqual([])
+
+    // A second outage, this time on a VISIBLE app. A later socket opening must
+    // leave it alone: if the edge outlived its window, the rule would silently
+    // mean "every alert since the first background" (reviewer probe B).
+    const id = raiseLossAlert()
+    act(() => new Socket('wss://gw.example/ws').fire('open'))
+    expect($notifications.get().map((n) => n.id)).toEqual([id])
+
+    view.unmount()
+  })
 })

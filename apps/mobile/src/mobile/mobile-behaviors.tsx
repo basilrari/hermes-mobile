@@ -148,7 +148,10 @@ export function MobileBehaviors() {
     })
 
     // A socket that opens is proof the connection is fine, so any connection-lost
-    // toast is stale by definition — including one raised after the resume edge.
+    // toast raised while we were hidden is stale by definition. Scoped to that
+    // window on purpose: a toast raised on a visible app (a second outage, after
+    // the window was spent) is not swept by the next open, and an unrelated
+    // plugin socket opening is not treated as recovery of the gateway.
     const removeOpenWatch = onSocketCreated((socket) => {
       socket.addEventListener('open', () => dismissHiddenToasts())
     })
