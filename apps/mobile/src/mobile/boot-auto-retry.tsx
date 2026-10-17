@@ -46,7 +46,11 @@ export function BootAutoRetry() {
       // `running: true`, so clearing it on `running && !error` ran *before* the boot
       // had failed: the counter a reload landed with was wiped, the next failure
       // wrote `1` again, and `tries >= MAX_TRIES` was unreachable (round 22 W4).
+      // The cover comes down here too: this is the branch that knows the connection
+      // landed, and `syncPrimaryReauthError` reaches it without passing through
+      // `running: true`, so the S3 branch below is not the only exit (round 23 W2).
       window.sessionStorage.removeItem(RETRY_KEY)
+      setRetrying(false)
     }
 
     if (boot.running && !boot.error) {

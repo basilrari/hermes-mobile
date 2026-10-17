@@ -177,6 +177,36 @@ describe('socket lifecycle', () => {
     expect(isSuspended()).toBe(true)
   })
 
+  it('closes a gateway socket that does not expose `url` (the wrapper knows the URL it was given)', () => {
+    // `SocketLike.url` is optional, so a socket implementation that omits it
+    // must not be read as "a sibling" — that skipped the close with no gap note
+    // and no failing test (round 23 W1). The wrapper captured the URL itself.
+    const closed: Array<{ code?: number; reason?: string }> = []
+    const win = {
+      WebSocket: function (this: unknown, _url: string) {
+        return {
+          readyState: 1,
+          close(code?: number, reason?: string) {
+            closed.push({ code, reason })
+            this.readyState = 3
+          },
+          addEventListener() {
+            /* no listeners needed for this case */
+          },
+        }
+      },
+    }
+    installSocketLifecycle(win as never)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+
+    new Socket('wss://gw.example/api/ws?ticket=t')
+    expect(liveSocketCount()).toBe(1)
+
+    setSuspended(true)
+    expect(closed).toEqual([{ code: 1000, reason: 'app backgrounded' }])
+    expect(liveSocketCount()).toBe(0)
+  })
+
   it('leaves a sibling stream alone: only the gateway socket has a resume redial', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)

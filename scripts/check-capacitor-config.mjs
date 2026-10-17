@@ -91,10 +91,13 @@ if (effective === undefined) {
 // the string `["none"]`, misses every case and lands on
 // `default: loggingEnabled = isDebug` — ON in a debuggable APK. That holds for the
 // nested key too: the default it would fall back to is the eagerly evaluated
-// top-level value, and `JSONUtils.getString` returns the non-null string unchanged
-// (`util/JSONUtils.java`); only a missing key returns that default. A `getString`
-// that throws on a non-string is the `org.json:json` artifact Capacitor declares
-// `testImplementation` only, not the `org.json` the APK runs (round 22 W1).
+// top-level value (`CapConfig.java:292-294`), and `JSONUtils.getString` returns a
+// non-null string unchanged (`util/JSONUtils.java:20-36`). The default is used when
+// `getDeepestObject` throws — `JSONUtils.java:174-186` — which is a missing OR
+// non-object `android` (`o.getJSONObject(k)` at :181), not only a missing key.
+// A `getString` that throws on a non-string is the `org.json:json` artifact
+// Capacitor declares `testImplementation` only, not the `org.json` the APK runs
+// (round 22 W1).
 // Coercing here would certify it (round 16).
 if (typeof effective !== 'string' || effective.toLowerCase() !== SAFE_BEHAVIOR) {
   console.error(

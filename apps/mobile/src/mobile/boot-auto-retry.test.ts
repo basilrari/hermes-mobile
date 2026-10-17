@@ -116,6 +116,26 @@ describe('BootAutoRetry (HM-32)', () => {
     expect(coverText()).toBeNull()
   })
 
+  it('drops the cover when the boot completes without an intermediate retry state (round 23 W2)', async () => {
+    const boot = await failBoot()
+    render(createElement(BootAutoRetry))
+
+    await act(async () => {
+      vi.advanceTimersByTime(1100)
+    })
+    expect(coverText()).toBe('Reconnecting…')
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('1')
+
+    // `syncPrimaryReauthError` calls `completeDesktopBoot()` straight from the
+    // failure: `error: null, running: false` with no `running: true` in between,
+    // so the branch that drops the cover for a boot in progress is never reached.
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: null, running: false })
+    })
+    expect(coverText()).toBeNull()
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBeNull()
+  })
+
   it('keeps the budget a reload landed with until the boot completes (round 22 W4)', async () => {
     const boot = await import('@/store/boot')
     window.sessionStorage.setItem('hermes-boot-retries', '1')

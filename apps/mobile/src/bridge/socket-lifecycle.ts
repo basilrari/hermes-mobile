@@ -49,9 +49,11 @@ import { reportLifecycleGap, resetLifecycleGapForTests } from './lifecycle-gap'
 
 /** The subset of WebSocket this module relies on. */
 export interface SocketLike {
-  /** The URL the socket was constructed with — real sockets carry it, and the
-   *  gateway/observer rule (`isGatewayWsUrl`) reads it to tell the gateway socket
-   *  from its siblings. */
+  /** The URL the socket was constructed with. Optional on purpose: observers
+   *  (`mobile-behaviors.tsx`'s open watch) read it to tell the gateway socket
+   *  from its siblings, but the close rule does NOT — it keys on the URL the
+   *  wrapper was handed, because an absent property here is indistinguishable
+   *  from "this is a sibling" and would skip the close in silence (round 23). */
   url?: string
   close(code?: number, reason?: string): void
   addEventListener(type: string, listener: () => void): void
@@ -65,7 +67,13 @@ export interface LifecycleWindow {
 
 type Observer = (socket: SocketLike) => void
 
-const live = new Set<SocketLike>()
+/**
+ * Socket → the URL the wrapper was given when it constructed it. The URL is
+ * captured there rather than read off the socket: `SocketLike.url` is optional,
+ * and an implementation that does not expose it would otherwise be classified
+ * as a sibling and never closed (round 23).
+ */
+const live = new Map<SocketLike, string>()
 const observers = new Set<Observer>()
 /**
  * Owner: `MobileBehaviors` (`apps/mobile/src/mobile/mobile-behaviors.tsx`). It
@@ -190,8 +198,8 @@ function closeTracked(socket: SocketLike, code = CLOSE_CODE, reason = CLOSE_REAS
  */
 export function closeGatewaySockets(code = CLOSE_CODE, reason = CLOSE_REASON): number {
   let closed = 0
-  for (const socket of [...live]) {
-    if (!isGatewayWsUrl(socket.url)) continue
+  for (const [socket, url] of [...live]) {
+    if (!isGatewayWsUrl(url)) continue
     if (closeTracked(socket, code, reason)) closed++
   }
   return closed
@@ -241,7 +249,7 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
           ? new (Original as unknown as new (u: string) => SocketLike)(url)
           : new (Original as unknown as new (u: string, p: string | string[]) => SocketLike)(url, protocols)
 
-      live.add(socket)
+      live.set(socket, url)
       // Only `close` untracks. `error` can fire on a socket that is still open
       // (a TLS/connection error on the wire does not always close it), and an
       // untracked-but-open socket is one the next background cannot close.
@@ -265,8 +273,9 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
       // The renderer dials on close. Closing here is the same close, applied
       // to a socket it already constructed — not a stand-in for that socket.
       // Gateway only, like `closeGatewaySockets`: a sibling's owner is the one
-      // that knows how to bring it back.
-      if (suspended && isGatewayWsUrl(socket.url)) closeTracked(socket)
+      // that knows how to bring it back. The URL is the one this wrapper was
+      // handed, not `socket.url` (optional — round 23).
+      if (suspended && isGatewayWsUrl(url)) closeTracked(socket)
       return socket
     }
     ;(Wrapped as unknown as { prototype: unknown }).prototype = (Original as { prototype: unknown }).prototype
