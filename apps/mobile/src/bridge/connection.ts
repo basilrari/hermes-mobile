@@ -60,8 +60,8 @@ export async function getGatewayWsUrl(): Promise<string> {
   // Failing here is the mobile-owned gate (no vendored patch): the ladder gets
   // no ticket and no URL, so it cannot dial. Nothing in this file clears the
   // flag — `mobile-behaviors.tsx` owns `appStateChange` and calls
-  // `setSuspended(false)` on the resume edge, after which the next attempt
-  // resolves normally (measured: 3ms after `visibilitychange`).
+  // `setSuspended(false)` on resume, on mount and on unmount, after which the
+  // next attempt resolves normally (measured: 3ms after `visibilitychange`).
   if (isSuspended()) throw new GatewayDialSuppressed()
   const target = await requireTarget()
   if (target.authMode === 'oauth') {

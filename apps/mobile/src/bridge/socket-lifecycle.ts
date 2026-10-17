@@ -48,6 +48,14 @@ type Observer = (socket: SocketLike) => void
 
 const live = new Set<SocketLike>()
 const observers = new Set<Observer>()
+/**
+ * Owner: `MobileBehaviors` (`apps/mobile/src/mobile/mobile-behaviors.tsx`). It
+ * is the only caller of `setSuspended`, driven by Capacitor `appStateChange`,
+ * and it clears the flag on mount and unmount as well as on resume: the auth
+ * path (401 → `requireReauth`) unmounts that component while the app is hidden,
+ * and `AppPlugin` does not replay `isActive: true` to the listener the next
+ * mount registers. A flag left set gates every dial on a visible app.
+ */
 let suspended = false
 /** One `console.warn` per window-less install, so a missing constructor is not spam. */
 let warnedMissingConstructor = false
@@ -86,6 +94,9 @@ export function onSocketCreated(observer: Observer): () => void {
 /**
  * Drop tracked sockets, the suspension flag, and observers. Tests share this
  * module's globals; a window-local install flag does not reset them.
+ *
+ * Ships in the bundle — only tests call it — and it clears the suspend gate as
+ * well as the socket registry, so nothing in the app may use it.
  */
 export function resetSocketLifecycleForTests(): void {
   suspended = false
