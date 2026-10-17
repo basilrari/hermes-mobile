@@ -55,13 +55,19 @@ function mount() {
   return render(createElement(MemoryRouter, null, createElement(MobileBehaviors)))
 }
 
-/** A window whose WebSocket records itself and can fire `open`/`close`. */
+/** The gateway RPC route (`connection-config.ts` builders) — the only socket
+ *  whose `open` is evidence about the gateway connection. */
+const GATEWAY_URL = 'wss://gw.example/api/ws?ticket=t'
+
+/** A window whose WebSocket records itself (and the URL it was built with) and
+ *  can fire `open`/`close`. */
 function lifecycleWindow() {
-  const created: { fire: (type: string) => void }[] = []
+  const created: { fire: (type: string) => void; url: string }[] = []
   const win = {
-    WebSocket: function () {
+    WebSocket: function (url: string) {
       const handlers = new Map<string, Array<() => void>>()
       const socket = {
+        url,
         readyState: 1,
         close() {
           socket.readyState = 3
@@ -167,10 +173,31 @@ describe('the connection-lost toast is dismissed only on recovery (HM-32)', () =
 
     // The post-resume dial succeeds: an open socket is proof, not a proxy.
     const Socket = win.WebSocket as unknown as new (url: string) => { fire: (t: string) => void }
-    const socket = new Socket('wss://gw.example/ws')
+    const socket = new Socket(GATEWAY_URL)
     expect(created).toHaveLength(1)
     act(() => socket.fire('open'))
 
+    expect($notifications.get()).toEqual([])
+    view.unmount()
+  })
+
+  it('does not treat a sibling socket opening as gateway recovery', () => {
+    const { win } = lifecycleWindow()
+    installSocketLifecycle(win as never)
+    const view = mount()
+    act(() => appState()({ isActive: false }))
+    const id = raiseLossAlert()
+
+    // Plugin streams, dictation and Bot Screen RFB all open on their own paths
+    // beside the gateway (`isGatewayWsUrl`). The observer watches every wrapped
+    // socket, so an `open` that is not the gateway must not spend the window.
+    const Socket = win.WebSocket as unknown as new (url: string) => { fire: (t: string) => void }
+    act(() => new Socket('wss://gw.example/api/audio/transcribe-stream?token=t').fire('open'))
+    act(() => new Socket('wss://gw.example/api/plugins/kanban/events?token=t').fire('open'))
+    expect($notifications.get().map((n) => n.id)).toEqual([id])
+
+    // The window is intact: the gateway opening still clears it.
+    act(() => new Socket(GATEWAY_URL).fire('open'))
     expect($notifications.get()).toEqual([])
     view.unmount()
   })
@@ -185,14 +212,14 @@ describe('the connection-lost toast is dismissed only on recovery (HM-32)', () =
     // recovers. The stale toast is dropped and the window is spent.
     act(() => appState()({ isActive: false }))
     raiseLossAlert()
-    act(() => new Socket('wss://gw.example/ws').fire('open'))
+    act(() => new Socket(GATEWAY_URL).fire('open'))
     expect($notifications.get()).toEqual([])
 
     // A second outage, this time on a VISIBLE app. A later socket opening must
     // leave it alone: if the edge outlived its window, the rule would silently
     // mean "every alert since the first background" (reviewer probe B).
     const id = raiseLossAlert()
-    act(() => new Socket('wss://gw.example/ws').fire('open'))
+    act(() => new Socket(GATEWAY_URL).fire('open'))
     expect($notifications.get().map((n) => n.id)).toEqual([id])
 
     view.unmount()

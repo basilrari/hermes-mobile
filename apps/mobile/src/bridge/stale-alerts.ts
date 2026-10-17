@@ -11,9 +11,11 @@
  * to "Hermes lost its connection" over a socket that is already open.
  *
  * This module owns the matching rule only: which alerts were raised while the
- * app was hidden. `mobile-behaviors.tsx` calls it on the resume edge and
- * dismisses what it returns. If the gateway is genuinely down, the ladder
- * escalates again ~300 s after resume, so nothing real is lost.
+ * app was hidden. `mobile-behaviors.tsx` calls it when a **gateway** socket opens
+ * and dismisses what it returns — one shot per hidden window. Not on the resume
+ * edge: coming back on screen does not prove the gateway is reachable, and a
+ * genuine outage keeps its "Reconnect now" affordance, which the ladder re-raises
+ * after its next 300 s of failures.
  */
 
 /** The fields this rule reads from an `AppNotification`. */

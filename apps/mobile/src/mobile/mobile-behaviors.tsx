@@ -8,6 +8,7 @@ import { translateNow } from '@/i18n'
 import { $panesFlipped } from '@/store/layout'
 import { $notifications, dismissNotification } from '@/store/notifications'
 import { onAppStateChange } from '~bridge/native'
+import { isGatewayWsUrl } from '~bridge/connection-config'
 import { onSocketCreated, setSuspended } from '~bridge/socket-lifecycle'
 import { staleConnectionLostIds } from '~bridge/stale-alerts'
 
@@ -147,13 +148,17 @@ export function MobileBehaviors() {
       if (!active) hiddenAtMs = Date.now()
     })
 
-    // A socket that opens is proof the connection is fine, so any connection-lost
-    // toast raised while we were hidden is stale by definition. Scoped to that
-    // window on purpose: a toast raised on a visible app (a second outage, after
-    // the window was spent) is not swept by the next open, and an unrelated
-    // plugin socket opening is not treated as recovery of the gateway.
+    // A GATEWAY socket that opens is proof the connection is fine, so any
+    // connection-lost toast raised while we were hidden is stale by definition.
+    // Scoped two ways on purpose: only the gateway route counts — sibling sockets
+    // (plugin streams, dictation, Bot Screen RFB) open beside it on other paths and
+    // their `open` is not evidence about the gateway (`isGatewayWsUrl`) — and only
+    // the window the app was hidden for, so a toast raised on a visible app is left
+    // alone. The observer sees every socket the wrapper builds, hence the check.
     const removeOpenWatch = onSocketCreated((socket) => {
-      socket.addEventListener('open', () => dismissHiddenToasts())
+      socket.addEventListener('open', () => {
+        if (isGatewayWsUrl(socket.url)) dismissHiddenToasts()
+      })
     })
 
     return () => {

@@ -109,11 +109,15 @@ export function onAppStateChange(callback: (active: boolean) => void): () => voi
   // release build; `console.*` is not (lifecycle-gap.ts).
   const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive)).catch(
     (err: unknown) => {
-      // The error's name only: `String(err)` is free-form, and this channel ends up
-      // in a trace buffer that can be shared off the device.
-      reportLifecycleGap(
-        `appStateChange did not register: socket will stay open while hidden (${err instanceof Error ? err.name : typeof err})`,
-      )
+      // `code` is the bounded field that separates Capacitor's rejections from one
+      // another (`UNIMPLEMENTED` = the plugin is absent on this platform, …).
+      // `name` cannot: `@capacitor/core` sets `message`/`code`/`data` and never
+      // `name`, so every plugin rejection reads `Error` and a tablet owner learns
+      // the control is off but not which way it failed (round 10, probed).
+      // Still no free-form text: no message, no stack, no URL.
+      const code = (err as { code?: unknown } | null)?.code
+      const reason = typeof code === 'string' && code ? code : err instanceof Error ? err.name : typeof err
+      reportLifecycleGap(`appStateChange did not register: socket will stay open while hidden (${reason})`)
       return null
     },
   )

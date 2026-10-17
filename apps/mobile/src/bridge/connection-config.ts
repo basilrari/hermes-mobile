@@ -70,6 +70,22 @@ export function buildGatewayWsUrlWithTicket(baseUrl: string, ticket: string): st
   return `${wsScheme}://${parsed.host}${prefix}/api/ws?ticket=${encodeURIComponent(ticket)}`
 }
 
+/**
+ * True when a socket URL is the gateway RPC route the builders above produce
+ * (`[/prefix]/api/ws`). Sibling sockets live on other paths — plugin streams
+ * (`/api/plugins/…`, `api/plugins.ts`), dictation (`/api/audio/transcribe-stream`,
+ * `voice-stream.ts`), Bot Screen RFB (`screen-pane.tsx`) — so their behaviour
+ * says nothing about the gateway connection.
+ */
+export function isGatewayWsUrl(url: null | string | undefined): boolean {
+  if (!url) return false
+  try {
+    return new URL(url).pathname.endsWith('/api/ws')
+  } catch {
+    return false
+  }
+}
+
 /** Build an absolute REST URL for a gateway path. */
 export function buildApiUrl(baseUrl: string, path: string): string {
   const parsed = new URL(baseUrl)

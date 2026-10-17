@@ -16,11 +16,14 @@
  * as an observer of this module, and a gap note reaches it when one exists
  * (lifecycle-gap.ts).
  *
- * Scope, stated honestly: a socket does not stay open while hidden. The renderer
- * still arms its reconnect timer before the constructor runs; the dial itself is
- * refused while suspended (the gate in `connection.ts`), and the request
- * reduction HM-32's acceptance line asks for is that issue's remaining task, not
- * this module's.
+ * Scope, stated honestly: a socket does not stay open while hidden, including on
+ * the failure path. The flag starts `false` in a fresh module instance, so a
+ * reload would re-arm the gate while the app is still hidden; `BootAutoRetry`
+ * therefore reloads only once the app is on screen again (`reloadWhenVisible`,
+ * `boot-reload.ts`). Within a hidden window the renderer still arms its reconnect
+ * timer before the constructor runs; the dial itself is refused while suspended
+ * (the gate in `connection.ts`), and the request reduction HM-32's acceptance
+ * line asks for is that issue's remaining task, not this module's.
  *
  * The close code is 1000. A script may send 1000 or 3000-4999; 1001 ("going
  * away") throws InvalidAccessError in Chromium, which is the Android WebView.
@@ -35,6 +38,10 @@ import { reportLifecycleGap, resetLifecycleGapForTests } from './lifecycle-gap'
 
 /** The subset of WebSocket this module relies on. */
 export interface SocketLike {
+  /** The URL the socket was constructed with — real sockets carry it, and the
+   *  gateway/observer rule (`isGatewayWsUrl`) reads it to tell the gateway socket
+   *  from its siblings. */
+  url?: string
   close(code?: number, reason?: string): void
   addEventListener(type: string, listener: () => void): void
 }

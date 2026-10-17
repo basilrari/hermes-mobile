@@ -13,6 +13,7 @@ import { $reauthNonce, loadTarget, setTarget, type GatewayTarget } from '~bridge
 import { ConnectScreen } from '~mobile/connect/ConnectScreen'
 import { LoginScreen } from '~mobile/connect/LoginScreen'
 import { TokenScreen } from '~mobile/connect/TokenScreen'
+import { reloadWhenVisible } from '~mobile/boot-reload'
 import { MobileBehaviors } from '~mobile/mobile-behaviors'
 import { initNativeChrome } from '~mobile/native-init'
 
@@ -118,6 +119,8 @@ function BootAutoRetry() {
   const boot = useStore($desktopBoot)
   const [retrying, setRetrying] = useState(false)
   const scheduled = useRef(false)
+  // Set while a reload is waiting for the app to come back on screen.
+  const cancelReload = useRef<null | (() => void)>(null)
 
   useEffect(() => {
     const KEY = 'hermes-boot-retries'
@@ -136,9 +139,17 @@ function BootAutoRetry() {
       setRetrying(true)
       const timer = window.setTimeout(() => {
         void window.hermesDesktop?.resetBootstrap?.()
-        window.location.reload()
+        // HM-32: a reload re-runs the bridge modules, so the suspend gate starts
+        // `false` again. Reloading while hidden would let the next boot dial, mint
+        // a ticket and hold that socket for the rest of the hidden window — so wait
+        // for the screen instead (`boot-reload.ts`).
+        cancelReload.current = reloadWhenVisible()
       }, 1100)
-      return () => window.clearTimeout(timer)
+      return () => {
+        window.clearTimeout(timer)
+        cancelReload.current?.()
+        cancelReload.current = null
+      }
     }
   }, [boot.running, boot.error])
 
