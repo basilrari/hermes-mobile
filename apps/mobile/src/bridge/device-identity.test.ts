@@ -134,4 +134,13 @@ describe('deviceIdentity — the label', () => {
     const handle = createDeviceIdentity(fakeStore())
     await expect(handle.setDeviceLabel('   ')).rejects.toThrow(/must not be empty/)
   })
+
+  it('re-derives a stored label that clamps to empty', async () => {
+    for (const blank of ['   ', ' \t\n ', ' '.repeat(MAX_LABEL_CHARS + 8)]) {
+      const store = fakeStore({ [DEVICE_LABEL_STORAGE]: blank })
+      const handle = createDeviceIdentity(store, () => 'SM-X200')
+      expect((await handle.deviceIdentity()).label).toBe('SM-X200')
+      expect(store.data[DEVICE_LABEL_STORAGE]).toBe('SM-X200')
+    }
+  })
 })

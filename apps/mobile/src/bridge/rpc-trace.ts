@@ -221,6 +221,12 @@ export function instrumentWebSocket(ws: WebSocketLike, trace: RpcTrace, now: () 
     }
     trace.record({ dir: 'in', name: d.name, ok: d.kind === 'response' ? d.ok : undefined })
   })
+
+  // A socket that closes with calls in flight would otherwise keep every
+  // unanswered id for the lifetime of the process. Round-1 finding.
+  const forgetInFlight = (): void => pending.clear()
+  ws.addEventListener('close', forgetInFlight)
+  ws.addEventListener('error', forgetInFlight)
 }
 
 /* ------------------------------------------------------------------ *

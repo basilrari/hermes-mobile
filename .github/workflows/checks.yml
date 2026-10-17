@@ -26,9 +26,19 @@ jobs:
           GITLEAKS_VERSION: "8.30.1"
         run: |
           set -euo pipefail
-          curl -sSL -o gl.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          tar xzf gl.tar.gz gitleaks
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          # Download under the asset's OWN name. `sha256sum -c` reads the filename
+          # out of the checksum file and opens that path, so saving under a
+          # different local name made verification fail BEFORE the scan ran —
+          # turning a broken token, a truncated download and a real leak into the
+          # same invisible nothing (PR #53 round-2 finding).
+          curl -sSL -o "${archive}" "${base}/${archive}"
+          curl -sSL -o gl-checksums.txt "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " ${archive}\$" gl-checksums.txt > gl-expected.txt
+          test -s gl-expected.txt
+          sha256sum -c gl-expected.txt
+          tar xzf "${archive}" gitleaks
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
           gitleaks version
       - name: Scan full history (redacted)
@@ -48,6 +58,9 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Apply patches
         run: npx patch-package
+      # Same script the bundle and e2e jobs run. A carried patch missing here
+      # would be absent from the tree the unit tests run.
+      - run: node scripts/apply-upstream-patches.mjs
       - name: Unit tests
         working-directory: apps/mobile
         run: npm test
@@ -65,3 +78,64 @@ jobs:
         run: node scripts/apply-upstream-patches.mjs --check
       - name: Self-test the apply mechanism
         run: node scripts/apply-upstream-patches.mjs --self-test
+
+  # Makes HM-11's acceptance ("zero bot_relay.*") a red check on every PR instead
+  # of a local-only observation.
+  bundle-hygiene:
+    name: bundle hygiene (mobile overrides applied)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx patch-package
+      # Parity with the root postinstall (which also applies carried patches): the
+      # artifact this job inspects is meant to be the shipped one.
+      - run: node scripts/apply-upstream-patches.mjs
+      - name: Build the bundle
+        run: npm run build:mobile
+      # Asserts the methods only the Desktop-as-router relay issues. An earlier
+      # version grepped `bot_relay\.`, which was red from the moment it landed:
+      # `bot_relay.deliver` is a legitimate canonical INBOUND method
+      # (apps/desktop/src/api/canonical-protocol.ts), so it asserted over the whole
+      # bundle rather than over the relay module. Measured on a built tree: these
+      # are 0 with the override applied and 2 without it. `bot_relay.reply` is a
+      # literal the relay really emits (relay.ts:714); `bot_relay._target_liveness`
+      # was dropped because it occurs only inside a block comment and cannot
+      # survive a build, so it could never fire (PR #53 round-3 finding).
+      - name: the Desktop bot relay must not be in the shipped bundle
+        run: |
+          set -euo pipefail
+          failed=0
+          for marker in 'bot_relay.roster.sync' 'bot_relay.outbox.' 'bot_relay.reply'; do
+            if grep -rFl --include='*.js' "$marker" apps/mobile/dist/assets; then
+              echo "FAIL: $marker is in the shipped bundle — the HM-11 override did not apply."
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then exit 1; fi
+          echo "OK: no relay-module method in shipped JS"
+
+  # Round-2 review suggestion: every layout claim in this repo was only ever
+  # verified by whoever ran the harness locally — `npm run e2e` was not a job, so
+  # a regression like the 412px chip overflow could land unnoticed. Reported, not
+  # required (review-gate stays the only merge control).
+  e2e-layout:
+    name: e2e layout pass (4 viewports)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx patch-package
+      - run: node scripts/apply-upstream-patches.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e

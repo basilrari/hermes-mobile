@@ -1,21 +1,39 @@
 # gitleaks configuration for hermes-mobile.
 #
-# History scan (2026-10-16, gitleaks 8.30.1, 27 commits): 13 hits, all
-# `generic-api-key` in upstream Hermes Desktop renderer test files. They are
-# fake fixtures (`token: 'test-…'`, `api.example.test/v1?api_key=…`,
-# `HERMES_API_EXPECTED_404`), not credentials. They are allowlisted by path
-# below; nothing else is suppressed, so a real secret anywhere still fails.
+# History scan (2026-10-16, gitleaks 8.30.1): 13 hits in the first scan, all
+# `generic-api-key` in upstream Hermes Desktop renderer test fixtures. They are
+# fake (`token: '…'`, `api.example.test/v1?api_key=…`, `HERMES_API_EXPECTED_404`),
+# not credentials.
+#
+# Round-1 finding: the first version allowlisted EVERY test file by glob
+# (`(?i).*\.(test|spec)\.(ts|tsx|…)$`), which silences the rule inside all of
+# them — including a real credential pasted into a test by mistake. The allowlist
+# is now the eight fixture paths that actually produced the 13 hits.
+#
+# What this file suppresses, completely (round-3 finding: the earlier claim
+# "nothing else is suppressed" was false, and the commit count was stale):
+#   1. the eight fixture paths below — 13 history hits, all fake;
+#   2. a second allowlist keyed on `regexTarget = "match"` for the on-device
+#      storage keys `hermes.preparedSubmissions…` and `hermes.cookies…`, which
+#      trip the generic-api-key rule on the KEY NAME, not on any value.
+# Measured at this head (gitleaks 8.30.1, 50 commits): this config → no leaks;
+# default rules alone → 15 leaks; the eight paths alone → 2 leaks, which is what
+# the second allowlist clears.
 
 [extend]
 useDefault = true
 
 [[allowlists]]
-description = "Upstream Desktop renderer test files: fake api keys/tokens in fixtures"
+description = "Upstream Desktop renderer fixtures: the eight files behind the 13 history hits"
 paths = [
-  # Any test file, at any depth (Vitest/Vitest-DOM fixtures).
-  '''(?i).*\.(test|spec)\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$''',
-  # The 404-probe helper holds a deliberate bogus key constant, not a test file.
   '''apps/desktop/electron/api-expected-404\.ts$''',
+  '''apps/desktop/electron/app-version\.test\.ts$''',
+  '''apps/desktop/electron/channel-build-version\.test\.ts$''',
+  '''apps/desktop/electron/native-token-store\.test\.ts$''',
+  '''apps/desktop/electron/updater/channel\.test\.ts$''',
+  '''apps/desktop/scripts/side-by-side\.windows\.test\.mjs$''',
+  '''apps/desktop/src/lib/preview-annotate/in-page\.test\.ts$''',
+  '''apps/desktop/src/plugins/hermes-bots/group-activity\.test\.ts$''',
 ]
 
 [[allowlists]]
