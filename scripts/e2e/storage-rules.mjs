@@ -20,7 +20,11 @@ export const RENDERER_JOURNAL_FALLBACK = 'hermes.desktop.preparedSubmissions.v1'
 export const CONVERSATION_STATE = [
   // Anchored: only the RENDERER's fallback, never our Capacitor journal.
   new RegExp(`^${RENDERER_JOURNAL_FALLBACK.replace(/\./g, '\\.')}$`),
-  /group-chat/i,
+  // Final segment, not a substring. group-chat.ts stores under `group-chats`
+  // and `group-chat-tombstones`; plugin storage prefixes that to
+  // `hermes.plugin.hermes-bots.group-chats`. A bare /group-chat/i also matches
+  // layout keys (`ui-group-chat-width`, `hermes.desktop.layout.group-chat-panel`).
+  /(^|\.)group-chats?(-tombstones)?$/i,
   /(^|[.\-_/])(messages|rooms?|sessions?|history)([.\-_/]|$)/i,
 ]
 

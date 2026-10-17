@@ -128,11 +128,15 @@ npm run e2e        # builds, then drives the built bundle in headless Chrome
 It logs in against an in-process **mock** gateway at four viewports (412x915,
 915x412, 800x1280, 1280x800) and asserts, per viewport: the connect screen
 renders; an `http://` gateway is refused **with a visible reason**; token login
-reaches the chat shell; the Bots roster surface is reachable; the RPC trace is
-live and shows **zero `bot_relay.*`**; `preparedSubmissions` is exposed while the
-renderer's `localStorage` fallback stays empty; `deviceIdentity()` returns a v4
-uuid; and **no conversation state is in any storage**. Plus a two-client pass and
-an id-across-a-relaunch pass. It is **47 checks**, all green on `main`.
+reaches the chat shell; the Bots roster surface is reachable; no horizontal
+overflow; the composer is inside the viewport; no new control is under the 24px
+touch floor; the RPC trace is live and shows **zero `bot_relay.*`**;
+`preparedSubmissions` is exposed while the renderer's `localStorage` fallback
+stays empty; `deviceIdentity()` returns a v4 uuid; and **no conversation state
+is in `localStorage`, `sessionStorage`, or an IndexedDB database name**. Plus a
+two-client pass and an id-across-a-relaunch pass. It is **59 checks** (14 per
+viewport × 4, plus 2 two-client, plus 1 relaunch). The e2e job printed `59/59`
+(run 38984506173).
 
 It cannot prove device, cookie or room behaviour (a browser uses `fetch`, not
 CapacitorHttp, and cannot read `Set-Cookie`; no hosted room is opened anywhere).

@@ -23,7 +23,7 @@ Taking over the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).
 | Path | What it is |
 |---|---|
 | `apps/mobile` | The Capacitor app: bridge, connect/login screens, Android project |
-| `apps/desktop` | Upstream Desktop renderer source (hermes-agent main `7bda2a33`), reused as-is through the `@/` alias (Electron main is not built) |
+| `apps/desktop` | Upstream Desktop renderer source (hermes-agent main `450ad5055e`), reused as-is through the `@/` alias (Electron main is not built) |
 | `apps/shared` | Upstream shared gateway client (`@hermes/shared`) |
 | `patches/` | `patch-package` fix for `@capacitor-community/safe-area` (IME double padding) |
 | `docs/ARCHITECTURE.md` | How the pieces fit together |

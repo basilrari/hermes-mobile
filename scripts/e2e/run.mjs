@@ -643,7 +643,7 @@ async function main() {
   console.log(`\nstorage inventory: ${storageInventory[0]?.local.length ?? 0} localStorage key(s), ${storageInventory[0]?.session.length ?? 0} sessionStorage key(s), ${storageInventory[0]?.databases.length ?? 0} IndexedDB database(s) — see storage-inventory.json`)
   const failed = results.filter((r) => !r.ok)
   const cap = turnsUsed > TURN_BUDGET
-  console.log(`\nLLM turns: ${turnsUsed} / ${TURN_BUDGET} budget (DeepSeek Flash only)${REAL_GATEWAY ? '' : ' — mock gateway, no model turn spent'}`)
+  console.log(`\nLLM turns: ${turnsUsed} / ${TURN_BUDGET} budget (DeepSeek Flash only)${REAL_GATEWAY ? ' — no scenario counts a turn' : ' — mock gateway, no model turn spent'}`)
   if (cap) console.error(`\nFAIL: turn budget exceeded (${turnsUsed} > ${TURN_BUDGET})`)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
   process.exit(failed.length === 0 && !cap ? 0 : 1)

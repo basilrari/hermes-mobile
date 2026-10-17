@@ -54,6 +54,19 @@ describe('isConversationState (HM-13 deny-list)', () => {
 
   it('every deny rule is anchored or word-bounded — no bare substring match', () => {
     expect(CONVERSATION_STATE.length).toBeGreaterThanOrEqual(3)
+    for (const rule of CONVERSATION_STATE) {
+      // A bare /group-chat/i has source "group-chat". Anchored rules start with
+      // ^ or a boundary alternative (^|...).
+      const anchored = rule.source.startsWith('^') || rule.source.startsWith('(^|')
+      expect(anchored, rule.source).toBe(true)
+    }
+    // The group-chat rule is the plugin storage key as a final segment
+    // (group-chat.ts writes `group-chats` / `group-chat-tombstones`).
+    expect(isConversationState('group-chats')).toBe(true)
+    expect(isConversationState('hermes.plugin.hermes-bots.group-chats')).toBe(true)
+    expect(isConversationState('hermes.plugin.hermes-bots.group-chat-tombstones')).toBe(true)
+    expect(isConversationState('ui-group-chat-width')).toBe(false)
+    expect(isConversationState('hermes.desktop.layout.group-chat-panel')).toBe(false)
   })
 })
 

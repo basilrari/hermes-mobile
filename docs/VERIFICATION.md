@@ -14,7 +14,7 @@ Branch `main`, renderer pinned to `NousResearch/hermes-agent` `450ad5055e`
 |---|---|---|
 | Bridge unit tests | `cd apps/mobile && npm test` | **106 passed** (9 files) |
 | Types | `cd apps/mobile && npm run typecheck` | 0 errors |
-| End-to-end harness | `npm run e2e` | **47 checks** at 412×915, 915×412, 800×1280, 1280×800 |
+| End-to-end harness | `npm run e2e` | **59 checks** at 412×915, 915×412, 800×1280, 1280×800 |
 | Gateway doctor | `cd scripts/gateway-doctor && python3 -m unittest test_doctor.py` | 31 tests |
 | Secret scan | `gitleaks detect --source . --config .gitleaks.toml` | no leaks (full history) |
 | Carried patches | `node scripts/apply-upstream-patches.mjs --check --self-test` | clean (no patches carried) |
@@ -23,15 +23,21 @@ Branch `main`, renderer pinned to `NousResearch/hermes-agent` `450ad5055e`
 What the harness actually asserts per viewport: the connect screen renders; an
 `http://` gateway is refused; token login reaches the chat shell; the **Bots
 roster** surface is reachable (docked at ≥640 px, or via the titlebar's *Show
-sidebar* on a phone); the RPC trace is live and shows **zero `bot_relay.*`**
-calls; `preparedSubmissions` is exposed and the renderer's own `localStorage`
-fallback is empty; `deviceIdentity()` returns a v4 uuid; **no conversation state
-is in `localStorage`**; and the device id is unchanged across a page reload
-(a relaunch). Plus one two-concurrent-client pass.
+sidebar* on a phone); no horizontal overflow; the composer is inside the
+viewport; no new control is under the 24px touch floor; the RPC trace is live
+and shows **zero `bot_relay.*`** calls; `preparedSubmissions` is exposed and the
+renderer's own `localStorage` fallback is empty; `deviceIdentity()` returns a v4
+uuid; **no conversation state is in `localStorage`, `sessionStorage`, or an
+IndexedDB database name**. Plus one two-concurrent-client pass and one
+id-across-a-relaunch pass. That is 14 checks × 4 viewports + 2 two-client
+checks + 1 relaunch check = 59. The three layout checks are the 12 added since
+the old 47. The `e2e layout pass (4 viewports)` job on this head printed
+`59/59 checks passed` (run 38984506173).
 
-CI on every pull request: `review-gate` (required — the merge control), and
-`secrets` / `app tests` / `carried upstream patches` / `bundle hygiene (mobile
-overrides applied)` as reported checks.
+CI on every pull request, named as `gh pr checks` prints them: `review-gate`
+(required — the merge control), and `secrets (gitleaks)` / `app tests (vitest +
+typecheck)` / `carried upstream patches` / `bundle hygiene (mobile overrides
+applied)` / `e2e layout pass (4 viewports)` as reported checks.
 
 ### Not verified
 
