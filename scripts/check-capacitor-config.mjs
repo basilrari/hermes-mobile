@@ -15,14 +15,16 @@
  * this check, so the shipping JSON cannot carry the key and stay green.
  *
  * A missing artefact is a failure, not a skip: a guard that cannot fail is not a
- * guard.
+ * guard. The exit codes are pinned by
+ * `apps/mobile/src/bridge/check-capacitor-config.test.ts`; an optional first
+ * argument points the check at a fixture instead of the real artefact.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const artefact = fileURLToPath(
-  new URL('../apps/mobile/android/app/src/main/assets/capacitor.config.json', import.meta.url),
-)
+const artefact =
+  process.argv[2] ??
+  fileURLToPath(new URL('../apps/mobile/android/app/src/main/assets/capacitor.config.json', import.meta.url))
 
 let raw
 try {
@@ -43,10 +45,18 @@ try {
   process.exit(1)
 }
 
-if (config !== null && typeof config === 'object' && 'loggingBehavior' in config) {
+// `'debug'` IS Capacitor's default (`CapConfig` sets `loggingEnabled = isDebug`,
+// false on a non-debuggable APK), so writing it explicitly is a no-op and must not
+// fail here — a false red on a safe value teaches people to work around the guard.
+if (
+  config !== null &&
+  typeof config === 'object' &&
+  'loggingBehavior' in config &&
+  config.loggingBehavior !== 'debug'
+) {
   console.error(
     `capacitor config check: the synced config sets loggingBehavior=${JSON.stringify(config.loggingBehavior)}.\n` +
-      "Any value other than Capacitor's default turns on bridge-wide logging, which puts the\n" +
+      "Any value other than Capacitor's default ('debug') turns on bridge-wide logging, which puts the\n" +
       'CapacitorHttp Cookie / X-Hermes-Session-Token headers and the login password body in\n' +
       "release logcat. Leave it unset in capacitor.config.ts and re-run `cap sync`.",
   )

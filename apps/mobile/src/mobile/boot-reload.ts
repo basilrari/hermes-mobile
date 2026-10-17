@@ -11,8 +11,10 @@
  * path (round 10).
  *
  * So: reload now if the app is visible, otherwise wait for the next
- * `visibilitychange` that reports visible. Returns an unsubscribe for the waiter;
- * the caller must use it if the boot recovers by another route.
+ * `visibilitychange` that reports visible — with a bounded fallback
+ * (`HIDDEN_RELOAD_FALLBACK_MS`) so a platform that never reports visible cannot
+ * leave the boot parked on the cover forever. Returns an unsubscribe for the
+ * waiter; the caller must use it if the boot recovers by another route.
  *
  * `document.visibilityState` is the signal `@capacitor/app`'s own web
  * implementation maps to `appStateChange`, so this module reads the same truth
@@ -25,17 +27,42 @@ export interface ReloadWindow {
 
 const noop = (): void => {}
 
-export function reloadWhenVisible(win: ReloadWindow = window as unknown as ReloadWindow): () => void {
+/** How long a deferred reload waits for the screen before reloading anyway. */
+export const HIDDEN_RELOAD_FALLBACK_MS = 60_000
+
+export function reloadWhenVisible(
+  win: ReloadWindow = window as unknown as ReloadWindow,
+  fallbackMs: number = HIDDEN_RELOAD_FALLBACK_MS,
+): () => void {
   if (win.document.visibilityState === 'visible') {
     win.location.reload()
     return noop
   }
 
-  const onVisible = (): void => {
-    if (win.document.visibilityState !== 'visible') return
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  // One exit path for both the visible edge and the fallback: drop the listener,
+  // drop the timer, reload once.
+  const stop = (): void => {
     win.document.removeEventListener('visibilitychange', onVisible)
+    if (timer !== undefined) clearTimeout(timer)
+    timer = undefined
+  }
+  const reload = (): void => {
+    stop()
     win.location.reload()
   }
+
+  const onVisible = (): void => {
+    if (win.document.visibilityState !== 'visible') return
+    reload()
+  }
   win.document.addEventListener('visibilitychange', onVisible)
-  return () => win.document.removeEventListener('visibilitychange', onVisible)
+  // Bounded fallback: if the platform never reports visible (a WebView that does
+  // not flip `visibilityState` on resume, an OEM launcher), waiting forever leaves
+  // the boot stuck behind the "Reconnecting…" cover with its retry budget unspent
+  // and nothing scheduled (round 11). One dial after a minute hidden is the cheaper
+  // failure — the same dial this branch already accepts elsewhere.
+  timer = setTimeout(reload, fallbackMs)
+  return stop
 }

@@ -48,7 +48,7 @@ npx patch-package              # applies patches/ (normally run by postinstall)
 node scripts/apply-upstream-patches.mjs   # applies patches/upstream (the other half of postinstall)
 cd apps/mobile
 npm run build                  # vite → apps/mobile/dist
-npx cap sync android           # Capacitor CLI needs Node 22+
+npm run cap:sync               # cap sync + the synced-config guard (Node 22+)
 cd android && ./gradlew assembleDebug
 # → apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk

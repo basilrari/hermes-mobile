@@ -68,4 +68,45 @@ describe('reloadWhenVisible (HM-32)', () => {
     fake.show('visible')
     expect(fake.reload).not.toHaveBeenCalled()
   })
+
+  it('reloads anyway after the bounded fallback, so a lost visibility signal cannot park the boot', () => {
+    vi.useFakeTimers()
+    try {
+      const fake = fakeWindow('hidden')
+      reloadWhenVisible(fake.win, 60_000)
+
+      vi.advanceTimersByTime(59_999)
+      expect(fake.reload).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      expect(fake.reload).toHaveBeenCalledTimes(1)
+      expect(fake.listenerCount()).toBe(0)
+
+      // No second reload from a late visible edge or a repeated tick.
+      fake.show('visible')
+      vi.advanceTimersByTime(120_000)
+      expect(fake.reload).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears the fallback timer when the visible edge wins, or when cancelled', () => {
+    vi.useFakeTimers()
+    try {
+      const shown = fakeWindow('hidden')
+      reloadWhenVisible(shown.win, 60_000)
+      shown.show('visible')
+      expect(shown.reload).toHaveBeenCalledTimes(1)
+
+      const cancelled = fakeWindow('hidden')
+      reloadWhenVisible(cancelled.win, 60_000)()
+
+      vi.advanceTimersByTime(120_000)
+      expect(shown.reload).toHaveBeenCalledTimes(1)
+      expect(cancelled.reload).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
