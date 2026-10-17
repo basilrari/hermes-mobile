@@ -125,25 +125,28 @@ describe('MobileBehaviors owns the suspend flag (HM-32)', () => {
     view.unmount()
   })
 
-  it('clears the flag when it unmounts while hidden, so the next mount can dial', () => {
+  it('leaves the gate closed when it unmounts while hidden, and the next mount opens it', () => {
     const view = mount()
 
     act(() => appState()({ isActive: false }))
     expect(isSuspended()).toBe(true)
 
-    // The 401 path: the component goes away while the app is still hidden.
+    // The 401 path: the component goes away while the app is still hidden. The
+    // gate must STAY closed — the resolver outlives this component, and a dial in
+    // that window would mint a ticket behind a screen nobody is looking at
+    // (round 14).
     view.unmount()
-    expect(isSuspended()).toBe(false)
+    expect(isSuspended()).toBe(true)
 
     // Next login remounts. The plugin does not replay `isActive: true`, so this
-    // mount is the only thing that can open the gate again.
+    // mount is the only thing that can open the gate again — and it does.
     const again = mount()
     expect(isSuspended()).toBe(false)
 
     act(() => appState()({ isActive: false }))
     expect(isSuspended()).toBe(true)
     again.unmount()
-    expect(isSuspended()).toBe(false)
+    expect(isSuspended()).toBe(true)
   })
 })
 

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react'
 // drawer on narrow viewports, so mounting it on a phone gives the desktop chat
 // experience, responsively. We only gate it behind connect/login.
 import DesktopController from '@/app'
-import { $desktopBoot } from '@/store/boot'
 
 import type { ProbeResult } from '~bridge/auth'
 import { $reauthNonce, loadTarget, setTarget, type GatewayTarget } from '~bridge/state'
@@ -13,7 +12,7 @@ import { $reauthNonce, loadTarget, setTarget, type GatewayTarget } from '~bridge
 import { ConnectScreen } from '~mobile/connect/ConnectScreen'
 import { LoginScreen } from '~mobile/connect/LoginScreen'
 import { TokenScreen } from '~mobile/connect/TokenScreen'
-import { reloadWhenVisible } from '~mobile/boot-reload'
+import { BootAutoRetry } from '~mobile/boot-auto-retry'
 import { MobileBehaviors } from '~mobile/mobile-behaviors'
 import { initNativeChrome } from '~mobile/native-init'
 
@@ -106,61 +105,4 @@ export function MobileRoot() {
   )
 }
 
-/**
- * Cold-launch connections sometimes time out because the Wi-Fi radio is still
- * waking from power-save (the foreground lock hasn't ramped it yet) — a reload a
- * second later, with the radio warm, connects fine. Rather than greet the user
- * with the failure screen, quietly reload-retry up to twice behind a
- * "Reconnecting…" cover; only after that does the manual BootFailureOverlay take
- * over. The counter lives in sessionStorage so it survives the reload, and is
- * cleared once the gateway connects.
- */
-function BootAutoRetry() {
-  const boot = useStore($desktopBoot)
-  const [retrying, setRetrying] = useState(false)
-  const scheduled = useRef(false)
-  // Set while a reload is waiting for the app to come back on screen.
-  const cancelReload = useRef<null | (() => void)>(null)
 
-  useEffect(() => {
-    const KEY = 'hermes-boot-retries'
-    const MAX = 2
-
-    if (boot.running && !boot.error) {
-      window.sessionStorage.removeItem(KEY)
-      return
-    }
-
-    if (boot.error && !boot.running && !scheduled.current) {
-      const tries = Number(window.sessionStorage.getItem(KEY) || '0')
-      if (tries >= MAX) return // give up — let BootFailureOverlay handle it
-      scheduled.current = true
-      window.sessionStorage.setItem(KEY, String(tries + 1))
-      setRetrying(true)
-      const timer = window.setTimeout(() => {
-        void window.hermesDesktop?.resetBootstrap?.()
-        // HM-32: a reload re-runs the bridge modules, so the suspend gate starts
-        // `false` again. Reloading while hidden would let the next boot dial, mint
-        // a ticket and hold that socket for the rest of the hidden window — so wait
-        // for the screen (`boot-reload.ts`). The wait is bounded, but the bound only
-        // drops this cover so the failure screen can take over; it never reloads
-        // blind, because that is the same hidden dial one step earlier.
-        cancelReload.current = reloadWhenVisible(window, {
-          onTimeout: () => setRetrying(false),
-        })
-      }, 1100)
-      return () => {
-        window.clearTimeout(timer)
-        cancelReload.current?.()
-        cancelReload.current = null
-      }
-    }
-  }, [boot.running, boot.error])
-
-  if (!retrying) return null
-  return (
-    <div className="fixed inset-0 z-[1500] grid place-items-center bg-(--ui-chat-surface-background) text-sm text-muted-foreground">
-      Reconnecting…
-    </div>
-  )
-}

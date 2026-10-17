@@ -117,8 +117,16 @@ export function MobileBehaviors() {
     // listener that clears it. A 401 while hidden unmounts this component
     // (http.ts → requireReauth → app.tsx leaves the connected tree) and the
     // plugin does not replay `isActive: true` to the listener the next login
-    // mounts, so a stale `true` would gate every dial on a visible app. Clear it
-    // on mount as well as on unmount: a remount while active cannot inherit it.
+    // mounts, so a stale `true` would gate every dial on a visible app. Clear it on
+    // MOUNT only: that is what a remount while active needs, and it is the clear
+    // that closes the stuck-flag failure. Clearing on unmount too would open the
+    // gate on a phone that is still hidden — the 401 path unmounts this component
+    // in the background, and the resolver outlives it (`store/profile.ts`,
+    // `api/plugins.ts`, `store/gateway.ts` all reach `getConnectionFor`), so a dial
+    // there would mint a ticket behind a screen nobody is looking at. The two
+    // headers that promise "no socket stays open while hidden, including on the
+    // failure path" (`socket-lifecycle.ts`, `connection.ts`) are unconditional, and
+    // an unmount clear contradicts them (round 14).
     setSuspended(false)
     //
     // While hidden, every ladder step is a failed attempt (the gate in
@@ -167,7 +175,9 @@ export function MobileBehaviors() {
       backHandle?.remove()
       removeAppState()
       removeOpenWatch()
-      setSuspended(false)
+      // Deliberately no `setSuspended(false)` here — see the mount comment. The
+      // next mount clears the flag, and until then the gate stays closed while the
+      // app is hidden.
       void kbShow.then((h) => h?.remove())
       void kbHide.then((h) => h?.remove())
       document.documentElement.removeAttribute('data-drawer-open')

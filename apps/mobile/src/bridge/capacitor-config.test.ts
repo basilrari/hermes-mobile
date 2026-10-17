@@ -40,16 +40,26 @@ function activeSource(): string {
   return stripComments(fs.readFileSync(configPath, 'utf8'))
 }
 
-const KEY = /\bloggingBehavior\s*:\s*(['"])([^'"]*)\1/
+const KEY = /\bloggingBehavior\s*:\s*(['"])([^'"]*)\1/g
 
-/** The `loggingBehavior` value in a config source, or `undefined` if absent. */
+/**
+ * The `loggingBehavior` value in a config source, or `undefined` if absent.
+ *
+ * The LAST match, not the first: a JS object literal takes the last duplicate key,
+ * so reading the first would guard green on a source whose compiled value is the
+ * dangerous one.
+ */
 export function loggingBehaviorOf(source: string): string | undefined {
-  return KEY.exec(stripComments(source))?.[2]
+  return [...stripComments(source).matchAll(KEY)].at(-1)?.[2]
 }
 
 describe('capacitor config (HM-32 credential guard)', () => {
   it("sets loggingBehavior to 'none', the only value that is off in a debug APK", () => {
     expect(loggingBehaviorOf(activeSource())).toBe('none')
+  })
+
+  it('reads the LAST value, which is the one the object literal compiles to', () => {
+    expect(loggingBehaviorOf("  loggingBehavior: 'none',\n  loggingBehavior: 'production',")).toBe('production')
   })
 
   it('reads the value from code, not from a comment', () => {
