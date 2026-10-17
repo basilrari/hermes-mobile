@@ -27,12 +27,12 @@ sidebar* on a phone); no horizontal overflow; the composer is inside the
 viewport; no new control is under the 24px touch floor; the RPC trace is live
 and shows **zero `bot_relay.*`** calls; `preparedSubmissions` is exposed and the
 renderer's own `localStorage` fallback is empty; `deviceIdentity()` returns a v4
-uuid; **no conversation state is in `localStorage`, `sessionStorage`, or an
-IndexedDB database name**. Plus one two-concurrent-client pass and one
-id-across-a-relaunch pass. That is 14 checks × 4 viewports + 2 two-client
-checks + 1 relaunch check = 59. The three layout checks are the 12 added since
-the old 47. The `e2e layout pass (4 viewports)` job on this head printed
-`59/59 checks passed` (run 38984506173).
+uuid and a non-empty label; **no conversation state is in `localStorage`,
+`sessionStorage`, or an IndexedDB database name**. Plus one two-concurrent-client
+pass and one id-across-a-relaunch pass. That is 14 checks × 4 viewports + 2
+two-client checks + 1 relaunch check = 59. The three layout checks are the 12
+added since the old 47. The `e2e layout pass (4 viewports)` job on `fac731f`
+printed `59/59 checks passed` (run 38986142771).
 
 CI on every pull request, named as `gh pr checks` prints them: `review-gate`
 (required — the merge control), and `secrets (gitleaks)` / `app tests (vitest +

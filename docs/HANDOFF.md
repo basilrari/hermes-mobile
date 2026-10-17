@@ -132,11 +132,11 @@ reaches the chat shell; the Bots roster surface is reachable; no horizontal
 overflow; the composer is inside the viewport; no new control is under the 24px
 touch floor; the RPC trace is live and shows **zero `bot_relay.*`**;
 `preparedSubmissions` is exposed while the renderer's `localStorage` fallback
-stays empty; `deviceIdentity()` returns a v4 uuid; and **no conversation state
-is in `localStorage`, `sessionStorage`, or an IndexedDB database name**. Plus a
-two-client pass and an id-across-a-relaunch pass. It is **59 checks** (14 per
-viewport × 4, plus 2 two-client, plus 1 relaunch). The e2e job printed `59/59`
-(run 38984506173).
+stays empty; `deviceIdentity()` returns a v4 uuid and a non-empty label; and
+**no conversation state is in `localStorage`, `sessionStorage`, or an IndexedDB
+database name**. Plus a two-client pass and an id-across-a-relaunch pass. It is
+**59 checks** (14 per viewport × 4, plus 2 two-client, plus 1 relaunch). The
+e2e job on `fac731f` printed `59/59` (run 38986142771).
 
 It cannot prove device, cookie or room behaviour (a browser uses `fetch`, not
 CapacitorHttp, and cannot read `Set-Cookie`; no hosted room is opened anywhere).
@@ -182,6 +182,8 @@ On pavillion-claw, Basil runs the doctor as shown in [`docs/GATEWAY_SETUP.md`](G
 | #47 | `4c21384` | #12 (HM-12) | `preparedSubmissions` durable send journal in the bridge. |
 | #48 | `69f6afd` | #25 (HM-25) | `deviceIdentity()` in the bridge. |
 | #49 | `a67a475` | #13 (HM-13) | Measured on-device storage inventory + the no-conversation-state gate. |
+| #51 | `8704948` | #14 (HM-14) | Gateway rooms only: never fall back to device-local rooms. |
+| #54 | `a8012fc` | #30, #31 (HM-30/31) | Layout pass: phone and tablet layouts measured; the overflow that measurement found is fixed. |
 
 Gate G0 was passed at #35, so M2 contract-dependent work (#19, #21, #22, #25) may start; #25 has landed.
 
@@ -194,9 +196,9 @@ Gate G0 was passed at #35, so M2 contract-dependent work (#19, #21, #22, #25) ma
 
 ### Issues
 
-Closed: #1, #5, #6, #7, #8, #9, #10, #11, #12, #13, #16, #25. #2 is still open even though #36 merged; close it after Basil's checklist confirms HTTPS login on the tablet.
+Closed: #1, #5, #6, #7, #8, #9, #10, #11, #12, #13, #14, #16, #25, #30, #31. #2 is still open even though #36 merged; close it after Basil's checklist confirms HTTPS login on the tablet.
 
-Still open (21, `gh issue list --state open`): the M0 items that need the tablet (**#2**, #3, #4); the gateway items that need pavillion-claw (#17, #18, #28); the app items that need a room-capable gateway or a device (#15, #26, #27, #29, #30, #31, #32); and the upstream set (#19–#24, #33). Issue number N is HM-N.
+Still open (21, `gh issue list --state open`, measured 2026-10-17): #2, #3, #4, #15, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #28, #29, #32, #33, #52, #55, #57. Of those, the tablet still owns **#2**, #3, #4; pavillion-claw owns #17, #18, #28; a room-capable gateway or a device still owns #15, #26, #27, #29, #32; upstream is #19–#24 and #33; #55 (HM-35) and #57 (HM-34) are layout follow-ups; #52 is this pull request. Issue number N is HM-N except those two.
 
 ## 8. Order of work and critical path
 
@@ -206,21 +208,21 @@ Milestones close in order, each when its gate passes. Engineer A owns the app; E
 |---|---|---|---|
 | [M0 Baseline on device](https://github.com/basilrari/hermes-mobile/milestone/1) | #1 ✓, #2 (merged, awaiting tablet check), #3, #4, **#5 ✓, #6 ✓, #7 ✓** | #8 ✓, #9 ✓, #10 ✓ | Headless ✓; tablet checklist outstanding; G0 ✓ |
 | [M1 Gateway-only client](https://github.com/basilrari/hermes-mobile/milestone/2) | **#11 ✓, #12 ✓, #13 ✓, #14 ✓, #16 ✓**, #15 (needs a device) | #17, #18 | Headless ✓; tablet checklist outstanding |
-| [M2 Live sync and read state](https://github.com/basilrari/hermes-mobile/milestone/3) | #25, #26 | #19–#24 (#24 stretch) | Headless + tablet checklist |
+| [M2 Live sync and read state](https://github.com/basilrari/hermes-mobile/milestone/3) | #25 ✓, #26 | #19–#24 (#24 stretch) | Headless + tablet checklist |
 | [M3 Continuity verified](https://github.com/basilrari/hermes-mobile/milestone/4) | #27, #29 | #28 | Headless + tablet checklist |
-| [M4 Tablet polish](https://github.com/basilrari/hermes-mobile/milestone/5) | #30, #31, #32 | #33 | Headless + tablet checklist |
+| [M4 Tablet polish](https://github.com/basilrari/hermes-mobile/milestone/5) | #30 ✓, #31 ✓, #32 | #33 | Headless + tablet checklist |
 
 Key dependencies:
 
 - App: #3 needs #1 and #2 (done) plus a new APK; #6 needs #2; #4 needs #3 and #6; #15 needs #4. #16 (renderer resync and override mechanism) unblocks #11, #12, #14.
 - Gateway: #17 and #18 need #8 and #9 (done).
-- **Critical path:** #18 (patched branch) → #19 (`groups.event`) → #20 and #21 → #23 → #26 (integration) → #27 (continuity matrix) → #30.
+- **Critical path:** #18 (patched branch) → #19 (`groups.event`) → #20 and #21 → #23 → #26 (integration) → #27 (continuity matrix) → #30 ✓ (#54).
 
 Next steps, in order — **the first two are Basil's; nothing in this repo can do them**:
 
 1. **Basil:** build a debug APK from current `main` and publish a new pre-release (both published releases still carry the old app ID and the cleartext build), then run the M0 tablet checklist (#2, #3, #4) and the doctor on pavillion-claw.
 2. **Basil:** approve the upstream PR titles and bodies (gate G3) and start #18 (the patched branch on pavillion-claw) — it blocks #19 and the rest of the M2 critical path. Nothing has been started.
-3. Eng A (doable from a box): the app items that need a room-capable gateway or a device (#15, #26, #27, #29, #30, #31, #32).
+3. Eng A: #55 and #57 are the layout follow-ups a box can do. #15, #26, #27, #29, and #32 still need a room-capable gateway or a device.
 4. Then M1–M3 close in order once the tablet checks and #18–#21 are unblocked.
 
 ### Known risks
