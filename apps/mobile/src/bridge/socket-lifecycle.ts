@@ -20,8 +20,11 @@
  *
  * The close code is 1000. A script may send 1000 or 3000-4999; 1001 ("going
  * away") throws InvalidAccessError in Chromium, which is the Android WebView.
- * A close that throws is not "already closing": the socket stays tracked so
- * the next suspend can retry.
+ * A close that throws is not "already closing": the socket stays tracked, and
+ * a re-asserted suspend (`setSuspended(true)` while already suspended, or
+ * `closeAllSockets()`) retries it. `appStateChange` does not deliver a second
+ * `isActive: false` while the app stays hidden, so that retry guards this
+ * module's contract, not an event the plugin emits.
  */
 
 /** The subset of WebSocket this module relies on. */
@@ -55,6 +58,15 @@ export function liveSocketCount(): number {
 /** True while the app is backgrounded. New sockets opened in that window are closed. */
 export function isSuspended(): boolean {
   return suspended
+}
+
+/**
+ * Did this window get the socket-lifecycle wrapper? Exported so other modules
+ * (`rpc-trace`) ask instead of reading a copy of the flag name — a rename here
+ * cannot leave a reader looking at a key nothing sets.
+ */
+export function isSocketLifecycleInstalled(win: object = globalThis): boolean {
+  return (win as { __hermesSocketLifecycleInstalled?: boolean }).__hermesSocketLifecycleInstalled === true
 }
 
 /** Watch every socket the renderer opens. Returns an unsubscribe. */
@@ -121,7 +133,7 @@ export function setSuspended(next: boolean): void {
  * whether or not tracing is enabled.
  */
 export function installSocketLifecycle(win: LifecycleWindow = globalThis as unknown as LifecycleWindow): void {
-  if (win.__hermesSocketLifecycleInstalled) return
+  if (isSocketLifecycleInstalled(win)) return
   const Original = win.WebSocket
   if (typeof Original === 'function' && !(Original as { __hermesLifecycleTracked?: boolean }).__hermesLifecycleTracked) {
     const Wrapped = function (this: unknown, url: string, protocols?: string | string[]): SocketLike {

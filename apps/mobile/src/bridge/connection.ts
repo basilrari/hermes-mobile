@@ -12,6 +12,7 @@ import type { HermesConnection } from '@/global'
 
 import { mintWsTicket } from './auth'
 import { buildGatewayWsUrl, buildGatewayWsUrlWithTicket } from './connection-config'
+import { isSuspended } from './socket-lifecycle'
 import { awaitTarget } from './state'
 
 function requireTarget() {
@@ -39,6 +40,15 @@ export function mobileConnectionId(baseUrl: string): string {
 /** Build the WS URL the gateway client connects with. OAuth/password gateways
  *  mint a fresh ticket; token gateways embed the long-lived token. */
 export async function getGatewayWsUrl(): Promise<string> {
+  // HM-32 review: the renderer redials on close (`scheduleReconnect` in the
+  // vendored boot hook), so closing the socket on backgrounding would re-mint a
+  // ticket and dial every ≤15s for the whole hidden window — more background
+  // traffic than leaving the socket open, the opposite of why it is closed.
+  // Failing here is the mobile-owned gate (no vendored patch): the ladder gets
+  // no ticket and no URL, so it cannot dial. It retries from a 300ms base, and
+  // resume runs getConnection again immediately, so the flag clears one tick
+  // after the app is visible.
+  if (isSuspended()) throw new Error('app backgrounded: gateway dial suppressed')
   const target = await requireTarget()
   if (target.authMode === 'oauth') {
     const ticket = await mintWsTicket(target.baseUrl)

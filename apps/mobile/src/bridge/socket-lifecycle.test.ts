@@ -39,16 +39,14 @@ function fakeSocket() {
 }
 
 /** Install into a fresh window-ish object so tests do not share wrapped state. */
-function freshWindow(sockets: ReturnType<typeof fakeSocket>[]) {
+function freshWindow() {
   const created: ReturnType<typeof fakeSocket>[] = []
   const win = {
-    WebSocket: function (this: unknown, url: string) {
-      void url
+    WebSocket: function (this: unknown) {
       const socket = fakeSocket()
       created.push(socket)
       return socket
     },
-    sockets,
   }
   return { win, created }
 }
@@ -60,7 +58,7 @@ beforeEach(() => {
 
 describe('socket lifecycle', () => {
   it('tracks every socket the renderer opens', () => {
-    const { win, created } = freshWindow([])
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     const a = new Socket('wss://example/a')
@@ -72,7 +70,7 @@ describe('socket lifecycle', () => {
   })
 
   it('closes every tracked socket when the app is backgrounded', () => {
-    const { win, created } = freshWindow([])
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     new Socket('wss://example/a')
@@ -90,7 +88,7 @@ describe('socket lifecycle', () => {
   })
 
   it('keeps a socket tracked when close rejects the code, and the next suspend finishes it', () => {
-    const { win, created } = freshWindow([])
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     new Socket('wss://example/a')
@@ -115,8 +113,8 @@ describe('socket lifecycle', () => {
     expect(liveSocketCount()).toBe(0)
   })
 
-  it('retries a close that threw, on a later suspend of an already-suspended app', () => {
-    const { win, created } = freshWindow([])
+  it('retries a close that threw when suspension is re-asserted (the contract, not a plugin event)', () => {
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     const socket = new Socket('wss://example/a') as ReturnType<typeof fakeSocket>
@@ -143,7 +141,7 @@ describe('socket lifecycle', () => {
   })
 
   it('closes a socket the renderer opens while already suspended, and does not keep it', () => {
-    const { win, created } = freshWindow([])
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     setSuspended(true)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
@@ -157,7 +155,7 @@ describe('socket lifecycle', () => {
   })
 
   it('does not close a resumed app\'s sockets and is idempotent on resume', () => {
-    const { win, created } = freshWindow([])
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     setSuspended(true)
@@ -169,7 +167,7 @@ describe('socket lifecycle', () => {
   })
 
   it('forgets a socket that closed on its own (no unbounded growth)', () => {
-    const { win, created } = freshWindow([])
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     new Socket('wss://example/a')
@@ -179,7 +177,7 @@ describe('socket lifecycle', () => {
   })
 
   it('tells observers about each new socket, and survives an observer throwing', () => {
-    const { win } = freshWindow([])
+    const { win } = freshWindow()
     installSocketLifecycle(win as never)
     const seen: unknown[] = []
     const bad = vi.fn(() => {
@@ -197,7 +195,7 @@ describe('socket lifecycle', () => {
     const seen: unknown[] = []
     onSocketCreated(() => seen.push(1))
     resetSocketLifecycleForTests()
-    const { win } = freshWindow([])
+    const { win } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     new Socket('wss://example/a')
@@ -205,7 +203,7 @@ describe('socket lifecycle', () => {
   })
 
   it('wraps exactly once, even if install runs again', () => {
-    const { win, created } = freshWindow([])
+    const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const first = win.WebSocket
     installSocketLifecycle(win as never)

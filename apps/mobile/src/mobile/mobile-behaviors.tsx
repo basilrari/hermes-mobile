@@ -5,8 +5,8 @@ import { useLocation } from 'react-router'
 
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { $panesFlipped } from '@/store/layout'
-import { onAppStateChange } from '../bridge/native'
-import { setSuspended } from '../bridge/socket-lifecycle'
+import { onAppStateChange } from '~bridge/native'
+import { setSuspended } from '~bridge/socket-lifecycle'
 
 /**
  * MobileBehaviors — the touch adaptations layered over the reused desktop UI.

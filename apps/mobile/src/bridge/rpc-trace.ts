@@ -17,7 +17,7 @@
  * WebSocket wrap, no global).
  */
 
-import { onSocketCreated } from './socket-lifecycle'
+import { isSocketLifecycleInstalled, onSocketCreated, type SocketLike } from './socket-lifecycle'
 
 export type TraceDirection = 'in' | 'out' | 'rest'
 
@@ -186,6 +186,14 @@ export interface WebSocketLike {
  * Only names leave this function — params are never read.
  */
 export function instrumentWebSocket(ws: WebSocketLike, trace: RpcTrace, now: () => number = Date.now): void {
+  // Two paths can reach the same socket (the WebSocket wrapper, and the
+  // socket-lifecycle observer). A second instrument would bind the ALREADY
+  // wrapped `send` and record every frame through both, so mark the socket.
+  // (`__hermesTraced` on the CONSTRUCTOR is installRpcTrace's own wrap guard —
+  // this marker is per socket, not per window.)
+  const marked = ws as unknown as { __hermesSocketTraced?: boolean }
+  if (marked.__hermesSocketTraced) return
+
   const pending = new Map<string | number, { name: string; t: number }>()
   const originalSend = ws.send.bind(ws)
 
@@ -202,6 +210,9 @@ export function instrumentWebSocket(ws: WebSocketLike, trace: RpcTrace, now: () 
     }
     originalSend(data)
   }
+  // Set before the listeners: `send` is what would double-record, and a throw
+  // from `addEventListener` below must not leave it looking un-instrumented.
+  marked.__hermesSocketTraced = true
 
   ws.addEventListener('message', (event) => {
     const text = frameText(event?.data)
@@ -259,6 +270,18 @@ interface TraceableWebSocket {
 }
 
 /**
+ * Stable observer reference. `observers` is a Set, so registering this function
+ * twice is a no-op — a repeated install cannot double-instrument a socket.
+ */
+const instrumentObserver = (socket: SocketLike): void => {
+  try {
+    instrumentWebSocket(socket as unknown as WebSocketLike, rpcTrace)
+  } catch {
+    /* tracing must never break the app */
+  }
+}
+
+/**
  * Wrap `globalThis.WebSocket` so every socket the vendored renderer opens is
  * traced, and publish `window.__hermesRpcTrace`. Idempotent. No-op when the
  * trace is disabled. Must run before any socket is created (boot.ts).
@@ -269,18 +292,13 @@ export function installRpcTrace(win: TraceWindow = globalThis as unknown as Trac
 
   // The socket-lifecycle module wraps WebSocket unconditionally (it has to work
   // when tracing is off), so when it is installed we instrument through its
-  // observer hook instead of wrapping a second time — two wrappers would record
-  // every frame twice. Round: HM-32.
-  const lifecycleInstalled = (win as unknown as { __hermesSocketLifecycleInstalled?: boolean }).__hermesSocketLifecycleInstalled
+  // observer hook instead of wrapping a second time: a second wrapper would put
+  // two instrumenters on one socket, and the trace would record every frame
+  // twice. (Wrapping twice around ONLY the trace wrapper is harmless — that
+  // was the earlier claim here, and it was wrong about the hazard.) Round: HM-32.
   const Original = win.WebSocket
-  if (lifecycleInstalled) {
-    onSocketCreated((socket) => {
-      try {
-        instrumentWebSocket(socket as unknown as WebSocketLike, rpcTrace)
-      } catch {
-        /* tracing must never break the app */
-      }
-    })
+  if (isSocketLifecycleInstalled(win)) {
+    onSocketCreated(instrumentObserver)
   } else if (typeof Original === 'function' && !(Original as { __hermesTraced?: boolean }).__hermesTraced) {
     const Wrapped = function (this: unknown, url: string, protocols?: string | string[]): WebSocketLike {
       const socket =

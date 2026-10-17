@@ -5,10 +5,12 @@ import {
   instrumentWebSocket,
   installRpcTrace,
   RpcTrace,
+  rpcTrace,
   safeRestPath,
   TRACE_CAPACITY,
   traceEnabled,
 } from './rpc-trace'
+import { installSocketLifecycle, resetSocketLifecycleForTests } from './socket-lifecycle'
 
 /** A minimal WebSocket double: records sends, lets a test push inbound frames. */
 function fakeSocket() {
@@ -190,5 +192,71 @@ describe('installRpcTrace', () => {
     const win = {} as never as Parameters<typeof installRpcTrace>[0] & { WebSocket: unknown }
     expect(installRpcTrace(win)).toBeNull()
     expect((win as { __hermesRpcTrace?: unknown }).__hermesRpcTrace).toBeUndefined()
+  })
+})
+
+describe('installRpcTrace on top of the socket lifecycle', () => {
+  /** A window whose WebSocket constructor hands out the trace fake sockets. */
+  function lifecycleWindow() {
+    const created: Array<ReturnType<typeof fakeSocket>> = []
+    const win = {
+      WebSocket: function (this: unknown) {
+        const socket = fakeSocket()
+        created.push(socket)
+        return socket
+      },
+    }
+    return { win, created }
+  }
+
+  const dirs = () => rpcTrace.snapshot().map((e) => `${e.dir}:${e.name}`)
+
+  it('instruments through the observer: exactly one out and one in per call', () => {
+    resetSocketLifecycleForTests()
+    rpcTrace.clear()
+    const { win, created } = lifecycleWindow()
+    installSocketLifecycle(win as never)
+    installRpcTrace(win as never)
+
+    // The shipping path: the lifecycle wrapper builds the socket, the trace
+    // never wraps WebSocket a second time.
+    const Socket = win.WebSocket as unknown as new (u: string) => ReturnType<typeof fakeSocket>
+    const ws = new Socket('wss://gw:9119/api/ws')
+    expect(created).toHaveLength(1)
+
+    ws.send(request(11, 'groups.send', { text: 'hi' }))
+    ws.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', id: 11, result: {} }) })
+
+    expect(dirs()).toEqual(['out:groups.send', 'in:groups.send'])
+    expect(rpcTrace.snapshot()[1]?.ms).toBeTypeOf('number')
+  })
+
+  it('does not double-record when installRpcTrace runs again for another window', () => {
+    resetSocketLifecycleForTests()
+    rpcTrace.clear()
+    const first = lifecycleWindow()
+    installSocketLifecycle(first.win as never)
+    installRpcTrace(first.win as never)
+
+    const second = lifecycleWindow()
+    installSocketLifecycle(second.win as never)
+    installRpcTrace(second.win as never)
+
+    const Socket = second.win.WebSocket as unknown as new (u: string) => ReturnType<typeof fakeSocket>
+    const ws = new Socket('wss://gw:9119/api/ws')
+    ws.send(request(12, 'sessions.list', {}))
+
+    expect(dirs()).toEqual(['out:sessions.list'])
+  })
+
+  it('never instruments one socket twice, however many paths reach it', () => {
+    resetSocketLifecycleForTests()
+    const trace = new RpcTrace()
+    const ws = fakeSocket()
+    instrumentWebSocket(ws, trace)
+    instrumentWebSocket(ws, trace)
+
+    ws.send(request(13, 'ping', {}))
+    expect(trace.snapshot().map((e) => e.dir)).toEqual(['out'])
   })
 })

@@ -30,6 +30,7 @@ vi.mock('@capacitor/preferences', () => {
 import { mintWsTicket, passwordLogin, probeGateway } from './auth'
 import { getConnection, getGatewayWsUrl } from './connection'
 import { api } from './http'
+import { resetSocketLifecycleForTests, setSuspended } from './socket-lifecycle'
 import { setTarget } from './state'
 
 /** Shape of a CapacitorHttp response (responseType: 'json'). */
@@ -101,6 +102,33 @@ describe('getConnection', () => {
     expect(c.mode).toBe('remote')
     expect(c.token).toBe('zzz')
     expect(c.wsUrl).toContain('token=zzz')
+  })
+})
+
+describe('gateway dial while the app is backgrounded (HM-32)', () => {
+  beforeEach(async () => {
+    resetSocketLifecycleForTests()
+    await setTarget({ baseUrl: 'http://gw:9119', authMode: 'oauth', provider: 'basic' })
+  })
+
+  it('refuses the ticket and the dial while hidden — no background request', async () => {
+    setSuspended(true)
+    httpSpy.mockResolvedValue(ok({ ticket: 'never-minted' }))
+
+    await expect(getGatewayWsUrl()).rejects.toThrow(/backgrounded/i)
+    await expect(getConnection()).rejects.toThrow(/backgrounded/i)
+    expect(httpSpy).not.toHaveBeenCalled()
+  })
+
+  it('dials again as soon as the app is visible', async () => {
+    setSuspended(true)
+    httpSpy.mockResolvedValue(ok({ ticket: 't2' }))
+    await expect(getGatewayWsUrl()).rejects.toThrow(/backgrounded/i)
+
+    setSuspended(false)
+
+    expect(await getGatewayWsUrl()).toBe('ws://gw:9119/api/ws?ticket=t2')
+    expect(httpSpy).toHaveBeenCalledTimes(1)
   })
 })
 
