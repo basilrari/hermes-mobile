@@ -144,8 +144,9 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
     // `isSocketLifecycleInstalled()` also routes `installRpcTrace` to the
     // observer branch — so tracing went quiet in the same breath. The only
     // observable of that failure was "the battery did not improve".
-    // `console.warn` reaches logcat in a release build too, where the RPC trace
-    // is inert by design (`VITE_HERMES_TRACE=false`).
+    // `console.warn` reaches logcat in the shipping build because
+    // `capacitor.config.ts` sets `loggingBehavior: 'production'`; Capacitor's
+    // default ('debug') drops WebView console output on a non-debuggable APK.
     if (!warnedMissingConstructor) {
       warnedMissingConstructor = true
       console.warn('[hm-32] WebSocket is not a constructor: socket lifecycle NOT installed')

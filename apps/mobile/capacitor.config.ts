@@ -4,6 +4,15 @@ const config: CapacitorConfig = {
   appId: 'io.github.basilrari.hermesmobile',
   appName: 'Hermes',
   webDir: 'dist',
+  // HM-32: Capacitor's default is 'debug', which makes `Logger.shouldLog()` false
+  // in a non-debuggable APK (CapConfig.java: isDebug → FLAG_DEBUGGABLE), so every
+  // console.warn the WebView sends is received by BridgeWebChromeClient and then
+  // dropped before Log.w. The socket-lifecycle module's only failure mode is
+  // silence — a WebSocket that is not a constructor, or a rejected
+  // `App.addListener('appStateChange')`, leaves the socket open while hidden and
+  // nothing else in the app would ever say so. 'production' is what makes those
+  // warns reach logcat in the build that ships.
+  loggingBehavior: 'production',
   // CapacitorHttp routes the bridge's REST calls (login + ws-ticket) through
   // the NATIVE HTTP stack, which bypasses the browser CORS that the gateway
   // locks to localhost — the whole reason a plain PWA can't talk to a remote

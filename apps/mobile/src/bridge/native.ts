@@ -103,7 +103,8 @@ export function onAppStateChange(callback: (active: boolean) => void): () => voi
   // owns the socket — but it must not be silent: this listener is the only
   // caller of `setSuspended`, so a plugin that fails to register means the
   // socket stays open on every background with nothing else to show for it
-  // (HM-32 review). One `console.warn` reaches logcat in a release build.
+  // (HM-32 review). `loggingBehavior: 'production'` in `capacitor.config.ts` is
+  // what gets this warn to logcat on a non-debuggable APK.
   const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive)).catch(
     (err: unknown) => {
       console.warn('[hm-32] appStateChange did not register: socket will stay open while hidden', err)
