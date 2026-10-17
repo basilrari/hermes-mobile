@@ -65,8 +65,10 @@ export async function getGatewayWsUrl(): Promise<string> {
   // no ticket and no URL, so it cannot dial. Nothing in this file clears the
   // flag — `mobile-behaviors.tsx` owns `appStateChange` and calls
   // `setSuspended(false)` on resume and on mount (never on unmount: that happens
-  // in the background), after which the next attempt resolves normally
-  // (measured: 3ms after `visibilitychange`).
+  // in the background), after which the next attempt resolves normally. The 3 ms
+  // from resume to a redial (round-4 measurement) belongs to the dial that follows
+  // the flag clear, not to the clear itself — the flag moves on `appStateChange`,
+  // the WebView's `visibilitychange` is a different edge.
   // The refusal is recorded as well as thrown: this is the only place that knows
   // the dial was suppressed, and the boot hook's retry decision only sees the
   // failure (`getBootProgress().retryable` in stubs.ts).

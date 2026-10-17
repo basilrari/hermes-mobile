@@ -22,6 +22,7 @@ import { useStore } from '@nanostores/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { $desktopBoot } from '@/store/boot'
+import { onAppStateChange } from '~bridge/native'
 import { reloadWhenVisible } from '~mobile/boot-reload'
 
 const RETRY_KEY = 'hermes-boot-retries'
@@ -56,8 +57,13 @@ export function BootAutoRetry() {
         // for the screen (`boot-reload.ts`). The wait is bounded, but the bound only
         // drops this cover so the failure screen can take over; it never reloads
         // blind, because that is the same hidden dial one step earlier.
+        // Two edges can bring the app back and they arrive in either order: the
+        // WebView's `visibilitychange` and the activity's `appStateChange`. The
+        // waiter re-checks on both, so it cannot be woken by the first one before
+        // the gate opens and then sit there forever (round 16).
         cancelReload.current = reloadWhenVisible(window, {
           onTimeout: () => setRetrying(false),
+          watchResume: (recheck) => onAppStateChange((active) => (active ? recheck() : undefined)),
         })
       }, RELOAD_DELAY_MS)
       return () => {

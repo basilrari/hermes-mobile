@@ -10,24 +10,21 @@
  * the exact symptom this branch exists to prevent, reached through the failure
  * path (round 10).
  *
- * So: reload now if the app is visible, otherwise wait for the next
- * `visibilitychange` that reports visible. The wait is bounded, and the bound
- * does NOT reload blind — a reload while hidden is the defect above, on a clock
- * instead of on a signal. At `timeoutMs` the waiter reports the stall through
- * `onTimeout` (the caller drops its "Reconnecting…" cover and the manual failure
- * screen takes over) and stays armed for the visible edge. That closes the dead
+ * So: reload now if the app is on screen, otherwise wait. Two edges can bring it
+ * on screen and they arrive in either order — `visibilitychange` (the WebView) and
+ * the app-state channel (the activity) — so the waiter re-checks on both and
+ * reloads when the condition holds, rather than sampling it once on the first
+ * edge (round 16). Sampling loses the reload when the WebView reports visible
+ * before `onResume` clears the gate, and nothing would wake the waiter again.
+ *
+ * The wait is bounded, and the bound does NOT reload blind — a reload while hidden
+ * is the defect above, on a clock instead of on a signal. At `timeoutMs` the waiter
+ * reports the stall through `onTimeout` (the caller drops its "Reconnecting…" cover
+ * and the manual failure screen takes over) and stays armed. That closes the dead
  * end — a boot parked on a cover with nothing scheduled — without a hidden dial.
  *
  * Returns an unsubscribe for the waiter; the caller must use it if the boot
  * recovers by another route.
- *
- * `document.visibilityState` is the WebView's own signal, and on Android the
- * suspend flag comes from a different place — the activity
- * (`BridgeActivity.onStop/onResume` → `AppPlugin` → `appStateChange`). They are
- * two truths and can disagree at an edge, so the flag has the last word: a page
- * the WebView calls visible while the gate says backgrounded does not reload
- * (round 15). Reloading there would rerun the bridge with the gate `false` and
- * dial in the background, which is the defect this module prevents.
  */
 import { isSuspended } from '~bridge/socket-lifecycle'
 
@@ -41,6 +38,18 @@ export interface ReloadOptions {
   timeoutMs?: number
   /** Called once when the wait exceeds `timeoutMs`. The reload stays armed. */
   onTimeout?: () => void
+  /**
+   * Whether a reload is safe now. Defaults to "the page is visible AND the suspend
+   * gate is open": the WebView and the activity are two truths, and the gate is
+   * the one the branch's whole invariant is defined by.
+   */
+  isOnScreen?: () => boolean
+  /**
+   * Subscribe to the platform's foreground channel (the caller wires
+   * `onAppStateChange`). Its edge is the other half of `isOnScreen`, so the waiter
+   * must listen to it too. Returns an unsubscribe.
+   */
+  watchResume?: (recheck: () => void) => () => void
 }
 
 /** Default bound on the deferred wait, in ms. */
@@ -50,20 +59,29 @@ const noop = (): void => {}
 
 export function reloadWhenVisible(
   win: ReloadWindow = window as unknown as ReloadWindow,
-  { timeoutMs = HIDDEN_RELOAD_TIMEOUT_MS, onTimeout }: ReloadOptions = {},
+  {
+    timeoutMs = HIDDEN_RELOAD_TIMEOUT_MS,
+    onTimeout,
+    isOnScreen,
+    watchResume,
+  }: ReloadOptions = {},
 ): () => void {
-  /** On screen = the page is visible AND the suspend gate agrees. */
-  const onScreen = (): boolean => win.document.visibilityState === 'visible' && !isSuspended()
+  const onScreen = isOnScreen ?? ((): boolean => win.document.visibilityState === 'visible' && !isSuspended())
 
   if (onScreen()) {
     win.location.reload()
     return noop
   }
 
+  let armed = true
   let timer: ReturnType<typeof setTimeout> | undefined
+  let unwatchResume: () => void = noop
 
   const stop = (): void => {
-    win.document.removeEventListener('visibilitychange', onVisible)
+    armed = false
+    win.document.removeEventListener('visibilitychange', tryReload)
+    unwatchResume()
+    unwatchResume = noop
     if (timer !== undefined) clearTimeout(timer)
     timer = undefined
   }
@@ -72,14 +90,17 @@ export function reloadWhenVisible(
     win.location.reload()
   }
 
-  const onVisible = (): void => {
-    if (!onScreen()) return
+  /** Both edges land here: reload only while the whole condition holds. */
+  function tryReload(): void {
+    if (!armed || !onScreen()) return
     reload()
   }
-  win.document.addEventListener('visibilitychange', onVisible)
+
+  win.document.addEventListener('visibilitychange', tryReload)
+  unwatchResume = watchResume?.(tryReload) ?? noop
 
   // Report the stall; do not reload. A reload here is the hidden dial this module
-  // exists to prevent (round 12), so the waiter stays armed for the visible edge.
+  // exists to prevent (round 12), so the waiter stays armed for either edge.
   timer = setTimeout(() => {
     timer = undefined
     onTimeout?.()

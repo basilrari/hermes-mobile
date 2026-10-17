@@ -84,8 +84,12 @@ if (effective === undefined) {
   process.exit(1)
 }
 
-// `CapConfig.java:295` lowercases before its switch, so 'NONE' is the same off value.
-if (String(effective).toLowerCase() !== SAFE_BEHAVIOR) {
+// `CapConfig.java:295` lowercases before its switch, so 'NONE' is the same off
+// value — but only a STRING can be that value. `JSONObject.getString` stringifies a
+// non-string member, so `["none"]` reaches the switch as `[\"none\"]`, misses the
+// 'none' case and lands on `default: loggingEnabled = isDebug` (on in a debug APK).
+// Coercing here would certify it (round 16).
+if (typeof effective !== 'string' || effective.toLowerCase() !== SAFE_BEHAVIOR) {
   console.error(
     `capacitor config check: the synced config resolves ${effectiveKey}=${JSON.stringify(effective)}.\n` +
       `On a debug APK only '${SAFE_BEHAVIOR}' leaves bridge logging off ('debug' sets loggingEnabled =\n` +

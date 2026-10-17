@@ -22,6 +22,7 @@ function fakeWindow(visibility: DocumentVisibilityState) {
     win,
     reload,
     listenerCount: () => listeners.size,
+    visibility: () => doc.visibilityState,
     /** Report a visibility change after moving the document to `state`. */
     show(state: DocumentVisibilityState) {
       doc.visibilityState = state
@@ -141,11 +142,43 @@ describe('reloadWhenVisible (HM-32)', () => {
     fake.show('visible')
     expect(fake.reload).not.toHaveBeenCalled()
 
-    // The gate opens (the activity resumed): the armed waiter reloads once.
     setSuspended(false)
     fake.show('visible')
     expect(fake.reload).toHaveBeenCalledTimes(1)
     expect(fake.listenerCount()).toBe(0)
+    cancel()
+  })
+
+  it('reloads when the gate opens after the visible edge, without waiting for a second edge', () => {
+    // The activity's window is visible before `onResume` clears the gate, so the
+    // WebView's edge can arrive first. Sampling the condition once there loses the
+    // reload: nothing dispatches another `visibilitychange`. The waiter watches the
+    // gate's own channel too, and re-checks when it opens (round 16).
+    let gateOpen = false
+    let wake: (() => void) | undefined
+    const fake = fakeWindow('hidden')
+
+    const cancel = reloadWhenVisible(fake.win, {
+      isOnScreen: () => fake.visibility() === 'visible' && gateOpen,
+      watchResume: (recheck) => {
+        wake = recheck
+        return () => {
+          wake = undefined
+        }
+      },
+    })
+
+    // Edge first, gate still closed: no reload, still armed.
+    fake.show('visible')
+    expect(fake.reload).not.toHaveBeenCalled()
+    expect(fake.listenerCount()).toBe(1)
+
+    // The gate opens on its own channel — the waiter reloads with no second edge.
+    gateOpen = true
+    wake?.()
+    expect(fake.reload).toHaveBeenCalledTimes(1)
+    expect(fake.listenerCount()).toBe(0)
+    expect(wake).toBeUndefined()
     cancel()
   })
 })
