@@ -65,3 +65,23 @@ jobs:
         run: node scripts/apply-upstream-patches.mjs --check
       - name: Self-test the apply mechanism
         run: node scripts/apply-upstream-patches.mjs --self-test
+
+  # Round-2 review suggestion: every layout claim in this repo was only ever
+  # verified by whoever ran the harness locally — `npm run e2e` was not a job, so
+  # a regression like the 412px chip overflow could land unnoticed. Reported, not
+  # required (review-gate stays the only merge control).
+  e2e-layout:
+    name: e2e layout pass (4 viewports)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx patch-package
+      - run: node scripts/apply-upstream-patches.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e

@@ -92,45 +92,49 @@ body {
 }
 
 /*
- * Mobile bottom status bar. Rather than HIDING controls the phone can't fit
- * (YOLO, background agents, cron, terminal, session timer) — which makes the app
- * feel like a stripped-down port — keep them all and let the bar scroll
- * horizontally (see the [data-statusbar] rule below). Only the client-version is
- * dropped: it's redundant with the backend version already shown.
+ * Mobile bottom status bar.
+ *
+ * Round-2 finding (review), and it is bigger than the selector bug it names:
+ * these rules were written against `[data-statusbar]` / `[data-statusbar-id]`,
+ * and the renderer emits `data-slot="statusbar"` on the <footer> and NOTHING on
+ * the items — they are plain <button>s identified by `id` in renderer state, not
+ * in the DOM. So the whole block was dead: measured at 412x915, `client v0.1.1`
+ * was still visible despite a rule saying `display: none !important`.
+ *
+ * Renamed onto the real hook, and the two per-item rules are REMOVED rather than
+ * renamed: there is no item-level attribute to target, so they could only ever
+ * be dead code that reads as implemented. Restoring them needs an upstream
+ * `data-statusbar-id` on the item element — filed as its own issue.
  */
-[data-statusbar-id='version-client'] {
-  display: none !important;
-}
-
-/* Gateway: show ONLY the colored status icon — hide the "Gateway" label and the
-   "ready/checking" status text (both rendered as <span> inside the item). */
-[data-statusbar-id='gateway-health'] span {
-  display: none !important;
-}
 
 /* Slightly taller bottom bar with larger text/icons so the items are easier to
    tap (the desktop bar is h-5 / 0.6875rem — too small for touch). Bumped a
    little, not a lot. */
-[data-statusbar] {
+[data-slot='statusbar'] {
   height: 1.75rem !important;
-  /* Show every control; scroll the bar horizontally rather than cram or clip. */
+  /* Wider than a phone: scroll the bar rather than cram. This overrides the
+     renderer's `overflow-x-clip` on the clusters, which exists to stop a wide
+     item painting a scrollbar. Phone width does the opposite — the media query
+     at the end of this file lets the clusters shrink. A hidden scrollbar plus
+     `flex: 0 0 auto` was clipping the host name with no affordance, and the
+     harness then exempted that overflow. */
   justify-content: flex-start !important;
-  overflow-x: auto;
+  overflow-x: auto !important;
   scrollbar-width: none;
 }
-[data-statusbar]::-webkit-scrollbar {
+[data-slot='statusbar']::-webkit-scrollbar {
   display: none;
 }
-[data-statusbar] > * {
+[data-slot='statusbar'] > * {
   overflow: visible !important;
   flex: 0 0 auto;
 }
-[data-statusbar] [data-statusbar-id] {
+[data-slot='statusbar'] button {
   font-size: 0.8125rem !important;
   padding-left: 0.5rem !important;
   padding-right: 0.5rem !important;
 }
-[data-statusbar] [data-statusbar-id] .codicon {
+[data-slot='statusbar'] button .codicon {
   font-size: 0.95rem !important;
 }
 
@@ -191,5 +195,44 @@ body {
     padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem) !important;
     padding-left: calc(env(safe-area-inset-left) + 0.5rem) !important;
     padding-right: calc(env(safe-area-inset-right) + 0.5rem) !important;
+  }
+}
+
+/*
+ * HM-30/31: the BOTTOM status bar's chips ("backend <host>", "client v0.1.1", …)
+ * are desktop chrome sized for a wide window. At 412px the harness measured one
+ * at right=435 in a 412 viewport — 23px past the edge, cut off by the cluster's
+ * own `overflow-x-clip`. Let the chips shrink and ellipsise inside their box at
+ * phone widths; no control moves or disappears and the long host name truncates
+ * the way the `truncate` span already intends.
+ *
+ * Round-2 finding: the first version of this rule was `div.min-w-0 > button.h-full`
+ * — an unanchored Tailwind shape matching five chips, with a comment naming the
+ * titlebar. Anchored on the real hook now: every other override in this file uses
+ * one, so an upstream class rename cannot silently widen this.
+ */
+@media (max-width: 47.5rem) {
+  /* The chip rule below cannot shrink a button whose parent is `flex: 0 0 auto`
+     (sized to content) inside a footer with `overflow-x: auto`. Measured at
+     412px that left the cluster at right=517 locally and right=545 on CI, and
+     the scroller exemption turned it into a green check. Constrain the parent
+     so the chips ellipsise inside the viewport. */
+  [data-slot='statusbar'] {
+    overflow-x: hidden !important;
+  }
+  [data-slot='statusbar'] > * {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden !important;
+  }
+  [data-slot='statusbar'] div.min-w-0 > button {
+    min-width: 0;
+    overflow: hidden;
+  }
+  [data-slot='statusbar'] div.min-w-0 > button .truncate {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

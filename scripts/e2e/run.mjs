@@ -107,6 +107,16 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? '  ✓' : '  ✗'} ${name}${detail ? `  — ${detail}` : ''}`)
 }
 
+/**
+ * A finding worth printing that is NOT a pass/fail: neither a break in the app
+ * nor something the harness can decide. Kept out of `results` so it cannot pad
+ * the score, and printed with a distinct marker so a reader can tell it apart
+ * from a check.
+ */
+function note(text) {
+  console.log(`  • ${text}`)
+}
+
 async function openClient(browser, profile, origin) {
   const context = await browser.newContext({
     viewport: { width: profile.width, height: profile.height },
@@ -115,6 +125,157 @@ async function openClient(browser, profile, origin) {
   const page = await context.newPage()
   await page.goto(origin, { waitUntil: 'domcontentloaded' })
   return { context, page }
+}
+
+/**
+ * The layout pass (HM-30 tablet polish, HM-31 phone pass).
+ *
+ * "Obvious breakage" is turned into assertions that can actually fail, instead of
+ * a human squinting at a screenshot:
+ *   - no horizontal overflow in any box that can actually scroll (see below);
+ *   - the composer — the BOTTOM-DOCKED input, not the first input in document
+ *     order — is present, bigger than a measurement probe and inside the
+ *     viewport (a chat you cannot type into is broken whatever it looks like);
+ *   - visible controls meet a 24 CSS px touch floor (Android's own guidance is
+ *     48dp; the renderer's icon buttons are smaller, so 24 is the breakage
+ *     floor) and anything under 32 is reported as polish.
+ *
+ * Round-2 findings (review) fixed in this version, all measured on this file:
+ *   1. the touch-floor check passed the LITERAL `true` and ran only in the
+ *      else-branch, so it could never fail and the floor carried no evidence.
+ *      It now asserts on every run, against the known debt below.
+ *   2. `documentElement.scrollWidth` is not a usable signal: #root is
+ *      `position: fixed; inset: 0; overflow: hidden`, so a 3000px child leaves
+ *      the document at the viewport width. The scrolling boxes are checked now.
+ *   3. the composer selector resolved `input[placeholder="Search sessions…"]` at
+ *      three of four viewports, and the 1x1 `textarea.sr-only` autosize probe
+ *      satisfied every condition — delete the composer and it still passed.
+ *   4. scroll-strip exemptions were collected and then thrown away, so a waiver
+ *      was invisible. They are printed now.
+ *   5. `outerHTML` was embedded in the detail, putting app markup (and any
+ *      attribute a user or host typed) into an artefact that is otherwise
+ *      "keys and sizes only". Geometry only now.
+ *
+ * Round-3: the status bar is not an exempted strip (chips must fit), and the
+ * touch allowlist is compared to every offender, not the first five.
+ */
+const MIN_TOUCH_PX = 24
+const POLISH_TOUCH_PX = 32
+const MAX_TOUCH_REPORT = 5
+
+/**
+ * Controls below the touch floor that are KNOWN and owned upstream (issue #55:
+ * the profile switcher's 20x20 icon buttons and the 12px-tall sidebar section
+ * rows). Pinned by label so a NEW offender turns this check red while the known
+ * renderer chrome stays visible as debt. When #55 lands, this list should empty.
+ */
+const KNOWN_UNDER_FLOOR = [
+  'button[Pinned]',
+  'button[Sessions]',
+  'button[New profile]',
+  'button[Import profile',
+]
+
+async function layoutFindings(page) {
+  return page.evaluate(({ minTouch, polishTouch }) => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const visible = (el) => {
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) return false
+      const style = window.getComputedStyle(el)
+      return style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity) > 0
+    }
+
+    const inHorizontalScroller = (el) => {
+      // The status bar is not a waiver. This pass exists to contain it. An
+      // `overflow-x: auto` footer made this return true and the check stayed
+      // green while chips sat past the edge (right=545 in a 412 viewport on CI).
+      if (el.closest("[data-slot='statusbar']")) return false
+      for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+        const style = window.getComputedStyle(node)
+        if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && node.scrollWidth > node.clientWidth + 1) return true
+      }
+      return false
+    }
+
+    // Round-2 finding: `documentElement.scrollWidth` never moves here — #root is
+    // `position: fixed; inset: 0; overflow: hidden`, so a 3000px child left the
+    // document at the viewport width. Check the boxes that can really scroll.
+    const documentOverflow = [document.documentElement, document.body, document.getElementById('root')]
+      .filter(Boolean)
+      .filter((el) => el.scrollWidth > vw + 1)
+      .map((el) => `${el.id || el.tagName.toLowerCase()}.scrollWidth=${el.scrollWidth} > ${vw}`)
+
+    const elementOverflow = []
+    const scrollStrips = []
+    for (const el of document.querySelectorAll('body *')) {
+      if (!visible(el)) continue
+      const r = el.getBoundingClientRect()
+      if (r.right <= vw + 1 || r.width >= vw * 4) continue
+      // An element inside an intentional horizontal scroller is SUPPOSED to sit
+      // past the edge — that is how the strip scrolls. Exempt, but REPORT the
+      // exemption (round-2 finding): a waiver nobody can see is not auditable.
+      if (inHorizontalScroller(el)) {
+        if (scrollStrips.length < 3) scrollStrips.push(`${el.tagName.toLowerCase()} right=${Math.round(r.right)}`)
+        continue
+      }
+      // Geometry only — never outerHTML (round-2 finding).
+      elementOverflow.push(`${el.tagName.toLowerCase()}.${String(el.className || '').split(' ').slice(0, 2).join('.')} right=${Math.round(r.right)} w=${Math.round(r.width)} parent=${(el.parentElement?.tagName || '').toLowerCase()}.${String(el.parentElement?.className || '').split(' ').slice(0, 2).join('.')}`)
+      if (elementOverflow.length >= 4) break
+    }
+
+    // Counted in full. The assertion compares every offender to the allowlist;
+    // the caller caps only the printed sample. A cap here hid a 6th label
+    // (round-3 finding): the check then said "all known debt" about a list it
+    // had not inspected.
+    let touchTotal = 0
+    const touchOffenders = []
+    for (const el of document.querySelectorAll('button, a[href], input, textarea, select, [role="button"]')) {
+      if (!visible(el)) continue
+      const r = el.getBoundingClientRect()
+      // A 1x1 (or 0-height) element is a renderer measurement hack, not a
+      // control: autosize textareas and offscreen probes. Excluded explicitly.
+      if (r.width * r.height <= 4) continue
+      if (Math.min(r.width, r.height) < minTouch) {
+        touchTotal += 1
+        touchOffenders.push(`${el.tagName.toLowerCase()}[${(el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 24)}]=${Math.round(r.width)}x${Math.round(r.height)}`)
+      }
+    }
+
+    // Round-2 finding: the first match in document order is NOT the composer. At
+    // three of four viewports it was the sessions search box, and the renderer's
+    // 1x1 `textarea.sr-only` autosize probe satisfied every old condition — the
+    // check passed with the composer deleted. Resolve the bottom-docked candidate
+    // with real area instead.
+    const candidates = [...document.querySelectorAll('textarea, [contenteditable="true"], input[type="text"]')]
+      .filter((el) => visible(el))
+      .map((el) => ({ el, r: el.getBoundingClientRect() }))
+      .filter(({ r }) => r.width * r.height > 4)
+      .filter(({ r }) => r.bottom >= vh - 120)
+      .sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height)
+
+    const best = candidates[0]
+    const composerOk = Boolean(best) && best.r.left >= -1 && best.r.right <= vw + 1 && best.r.bottom <= vh + 1
+    const composerNote = best
+      ? `composer ${best.el.tagName.toLowerCase()} ${Math.round(best.r.width)}x${Math.round(best.r.height)} bottom=${Math.round(best.r.bottom)} of ${vh} (${candidates.length} bottom-docked candidate(s))`
+      : 'no bottom-docked composer: nothing with real area within 120px of the bottom edge'
+
+    return {
+      documentOverflow,
+      elementOverflow,
+      scrollStrips,
+      touchTotal,
+      touchOffenders,
+      composerOk,
+      composerNote,
+      viewport: `${vw}x${vh}`,
+      polishTargets: [...document.querySelectorAll('button, [role="button"]')]
+        .filter((el) => visible(el))
+        .map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.width, r.height) })
+        .filter((v) => v > 0 && v < polishTouch).length,
+    }
+  }, { minTouch: MIN_TOUCH_PX, polishTouch: POLISH_TOUCH_PX })
 }
 
 /**
@@ -197,6 +358,30 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     check(`${profile.name}: Bots roster surface present`, bots > 0, how)
     if ((await page.getByText('CONNECTING', { exact: false }).count()) > 0) {
       console.log(`    ! ${profile.name}: boot overlay still on screen against the mock gateway`)
+    }
+    const layout = await layoutFindings(page)
+    check(`${profile.name}: no horizontal overflow in any scrollable box`, layout.documentOverflow.length === 0 && layout.elementOverflow.length === 0,
+      [...layout.documentOverflow, ...layout.elementOverflow].join(' | ') || `all boxes within viewport ${layout.viewport}`)
+    if (layout.scrollStrips.length) {
+      note(`${profile.name}: ${layout.scrollStrips.length} element(s) exempted inside a horizontal scroller — ${layout.scrollStrips.join(' | ')}`)
+    }
+    check(`${profile.name}: composer visible inside the viewport`, layout.composerOk, layout.composerNote)
+    // Asserts on EVERY run (round-2 finding: the old version passed the literal
+    // `true` in an else-branch, so it could only run when nothing was wrong and
+    // reported success unconditionally). Known renderer chrome under the floor is
+    // pinned in KNOWN_UNDER_FLOOR (issue #55) so THIS check cannot go quiet: any
+    // offender that is not the known debt fails it.
+    const unexpected = layout.touchOffenders.filter((o) => !KNOWN_UNDER_FLOOR.some((known) => o.startsWith(known)))
+    const sample = (list) => {
+      const head = list.slice(0, MAX_TOUCH_REPORT).join(' | ')
+      return list.length > MAX_TOUCH_REPORT ? `${head} (+${list.length - MAX_TOUCH_REPORT} more)` : head
+    }
+    const touchDetail = layout.touchTotal === 0
+      ? 'all visible controls >= floor'
+      : `${layout.touchTotal} under the ${MIN_TOUCH_PX}px floor${unexpected.length ? ` — NEW: ${sample(unexpected)}` : ` — all known debt (#55): ${sample(layout.touchOffenders)}`}`
+    check(`${profile.name}: no NEW control under the ${MIN_TOUCH_PX}px touch floor`, unexpected.length === 0, touchDetail)
+    if (layout.polishTargets > 0) {
+      note(`${profile.name}: ${layout.polishTargets} control(s) under ${POLISH_TOUCH_PX}px — polish list, not breakage`)
     }
     await page.screenshot({ path: path.join(shotDir, `${profile.name}-03-app.png`) })
 
@@ -298,9 +483,24 @@ async function runTwoClients(browser, origin, gatewayUrl, token) {
       await page.getByLabel('Session token').waitFor({ state: 'visible', timeout: 20_000 })
       await page.getByLabel('Session token').fill(token)
       await page.getByRole('button', { name: 'Connect' }).click()
-      await page.getByText('Sessions', { exact: false }).first().waitFor({ state: 'visible', timeout: 45_000 })
+      // Phone portrait does not mount the Sessions pane until Show sidebar
+      // (below 640px; mobile-behaviors.tsx). Waiting only for "Sessions" timed
+      // out on CI after the tablet had connected (run 38923939411, run.mjs:475).
+      // finishSignIn is the shell-ready check runProfile already passes on that
+      // viewport: dismiss onboarding, then NEW SESSION or Sessions.
+      await finishSignIn(page)
       check(`two clients: ${label} connected`, true)
     }
+  } catch (error) {
+    const phoneState = await b.page.evaluate(() => ({
+      newSession: document.body.innerText.includes('NEW SESSION'),
+      sessions: document.body.innerText.includes('Sessions'),
+      showSidebar: document.body.innerText.includes('Show sidebar'),
+      connecting: document.body.innerText.includes('CONNECTING'),
+      onboarding: /choose a provider later/i.test(document.body.innerText),
+    })).catch(() => null)
+    console.error(`two clients: phone shell state ${JSON.stringify(phoneState)}`)
+    throw error
   } finally {
     await Promise.all([a.context.close(), b.context.close()])
   }
