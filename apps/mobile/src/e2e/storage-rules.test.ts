@@ -49,6 +49,11 @@ describe('isConversationState (HM-13 deny-list)', () => {
     expect(classifyStorageKey('hermes.desktop.layoutTree.v2').kind).toBe('ui pref / rebuildable cache')
   })
 
+  it('flags the composer queue — a queued prompt, not a UI pref', () => {
+    expect(isConversationState('hermes.desktop.composerQueue.v1')).toBe(true)
+    expect(classifyStorageKey('hermes.desktop.composerQueue.v1').kind).toBe('conversation state')
+  })
+
   it('does not flag UI preferences that merely contain a near-miss word', () => {
     for (const key of [
       'hermes.desktop.layoutTree.v2',

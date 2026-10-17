@@ -31,6 +31,9 @@ export const CONVERSATION_STATE = [
   // session. The migration flag (`...v2.migrated`) is not a payload.
   /^hermes\.desktop\.inflightTurnJournal\.v1$/,
   /^hermes\.desktop\.inflightTurnJournal\.v2:/,
+  // Queued prompt text, including an expanded skill body (composer-queue.ts).
+  // Exact: the store is one key, not a prefix.
+  /^hermes\.desktop\.composerQueue\.v1$/,
 ]
 
 /** Patterns actually observed on a full login + boot; classified in ARCHITECTURE.md. */
@@ -46,6 +49,11 @@ export const KNOWN_STORAGE = [
     match: /^hermes\.desktop\.inflightTurnJournal\.v(1$|2:)/,
     kind: 'conversation state',
     note: 'denied: user prompt and streamed assistant rows',
+  },
+  {
+    match: /^hermes\.desktop\.composerQueue\.v1$/,
+    kind: 'conversation state',
+    note: 'denied: queued prompt text, including an expanded skill body',
   },
   { match: /^hermes\.desktop\./, kind: 'ui pref / rebuildable cache', note: 'layout, panes, tools, theme, tutorials, pricing' },
   { match: /^hermes\.updates\.last-passive-check$/, kind: 'ui pref', note: 'update check timestamp' },

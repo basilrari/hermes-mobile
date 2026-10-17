@@ -612,8 +612,9 @@ async function main() {
   const external = process.env.HERMES_E2E_GATEWAY_URL
   const mock = external ? null : await startMockGateway({ logPath: path.join(shotDir, 'mock-gateway.log') })
   const gatewayUrl = external ?? mock.url
-  // The fallback lets a URL-only run authenticate. It is not a supplied credential.
-  const suppliedToken = process.env.HERMES_E2E_TOKEN
+  // The fallback lets a URL-only run authenticate. An empty string is unset.
+  // It is not a supplied credential.
+  const suppliedToken = process.env.HERMES_E2E_TOKEN || undefined
   const token = external ? (suppliedToken ?? 'e2e-token') : mock.token
 
   // Never print the credential; say only whether one was supplied.

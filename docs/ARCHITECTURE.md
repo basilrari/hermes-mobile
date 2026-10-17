@@ -148,14 +148,17 @@ Measured 2026-10-16 (token gateway, four viewports, after login + roster):
 | `CapacitorStorage.hermes.device.id.v1`, `.device.label.v1` | bridge state | The HM-25 device identity. Not a secret, not a hardware id. |
 | `hermes-boot-background`, `hermes-boot-color-scheme` | UI preference | Chosen before first paint. |
 | `hermes-desktop-active-profile-v1` | UI preference | Last profile shown. |
-| `hermes.desktop.*` | UI preference / rebuildable cache | Layout tree, pane states, theme, tool view, keybinds, tutorials, `model-pricing.v1` (a cache). Not `inflightTurnJournal`. |
+| `hermes.desktop.*` | UI preference / rebuildable cache | Layout tree, pane states, theme, tool view, keybinds, tutorials, `model-pricing.v1` (a cache). Not `inflightTurnJournal` or `composerQueue.v1`. |
 | `hermes.updates.last-passive-check` | UI preference | A timestamp. |
 | `hermes.desktop.preparedSubmissions.spent.*` | rebuildable cache | Send tombstones; appears only after a send. |
 
 Nothing in this measured dump is conversation state. `hermes.desktop.inflightTurnJournal.v1`
 and `.v2:<sessionId>` hold the user prompt and the streamed assistant rows
 (`inflight-turn-journal.ts`); the harness denies those keys. This run does not
-write them, because no scenario prompts a model. `stubs.ts` was reviewed for
+write them, because no scenario prompts a model. `hermes.desktop.composerQueue.v1`
+holds queued prompt text, including an expanded skill body (`composer-queue.ts`);
+the harness denies that key. This run does not write it, because no scenario
+queues a prompt. `stubs.ts` was reviewed for
 this rule: it declares 65 inert async defaults and reaches no storage API at all.
 
 **Not yet covered:** this dump is the login → roster surface. Keys that only
