@@ -123,12 +123,12 @@ export function MobileBehaviors() {
     // While hidden, every ladder step is a failed attempt (the gate in
     // connection.ts), so the vendored boot hook's 300 s escalation raises a
     // "Hermes lost its connection" toast with `durationMs: 0` — no timer, and
-    // nothing on the reconnect path dismisses it. A toast raised while we were
-    // hidden is stale once the connection is back, so it is dropped when a
-    // socket OPENS, not when the app resumes: coming back on screen does not
-    // prove the gateway is reachable, and a remaining toast is the only
-    // actionable thing ("Reconnect now") a user has while the gateway is still
-    // down. Resume only clears the flag.
+    // nothing on the reconnect path dismisses it. So: on the next socket OPEN,
+    // drop the connection-lost alerts that were raised at or after this
+    // background edge, then forget the edge (one shot per hidden window). Not on
+    // resume: coming back on screen does not prove the gateway is reachable, and a
+    // remaining toast is the only actionable thing ("Reconnect now") a user has
+    // while the gateway is still down. Resume only clears the suspend flag.
     let hiddenAtMs = 0
     const dismissHiddenToasts = (): void => {
       if (hiddenAtMs === 0) return
@@ -136,6 +136,10 @@ export function MobileBehaviors() {
       for (const id of staleConnectionLostIds($notifications.get(), title, hiddenAtMs)) {
         dismissNotification(id)
       }
+      // One shot per hidden window. Without this the timestamp outlives its
+      // window and the rule silently means "any alert since the first background",
+      // which is not what `stale-alerts.ts` documents (round 8).
+      hiddenAtMs = 0
     }
 
     const removeAppState = onAppStateChange((active) => {

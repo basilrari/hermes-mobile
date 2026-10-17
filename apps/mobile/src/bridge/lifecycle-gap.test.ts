@@ -34,6 +34,20 @@ describe('lifecycle gap notes (HM-32)', () => {
     expect(seen).toEqual(['one'])
   })
 
+  it('redacts a query string and a credential-shaped run', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const seen: string[] = []
+    onLifecycleGap((m) => seen.push(m))
+
+    reportLifecycleGap('dial failed for wss://gw:9119/api/ws?ticket=TICKET-abc123')
+    reportLifecycleGap(`stray header: ${'a'.repeat(40)}`)
+
+    expect(seen[0]).not.toContain('TICKET-abc123')
+    expect(seen[0]).not.toContain('ticket=')
+    expect(seen[1]).toContain('<redacted>')
+    expect(seen[1]).not.toContain('a'.repeat(40))
+  })
+
   it('survives a reporter that throws', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     onLifecycleGap(() => {

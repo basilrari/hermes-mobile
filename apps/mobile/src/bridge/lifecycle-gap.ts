@@ -69,7 +69,12 @@ function deliver(next: Reporter, message: string): void {
   }
 }
 
-/** Drop anything from the first `?` or `#` on: the part that carries a ticket. */
+/**
+ * Drop anything from the first `?` or `#` on (the part that carries a ticket), and
+ * redact any run long enough to be a credential. This is the second gate, not the
+ * only one: callers are expected to pass a fixed note plus an error name, never a
+ * free-form payload (round 8).
+ */
 export function scrubGapNote(message: string): string {
-  return message.replace(/[?#][^\s]*/g, '')
+  return message.replace(/[?#][^\s]*/g, '').replace(/[\w.+/=-]{32,}/g, '<redacted>')
 }

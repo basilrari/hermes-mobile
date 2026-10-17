@@ -9,10 +9,12 @@
  * (`scheduleReconnect` in the vendored boot hook), so a flag that is only read
  * on the way out leaves the new socket up until the next background edge.
  *
- * This is deliberately NOT part of rpc-trace.ts. The trace is off in a release
- * build (`installRpcTrace` returns early), so anything that has to work in the
- * shipped app cannot live behind that flag. Here the dependency runs the other
- * way: the trace registers as an observer of this module.
+ * This is deliberately NOT part of rpc-trace.ts. `VITE_HERMES_TRACE=false` is
+ * the documented release knob and leaves the whole trace inert; nothing in this
+ * repo sets it today, so a build usually ships the trace — but the control must
+ * not depend on that. Here the dependency runs the other way: the trace registers
+ * as an observer of this module, and a gap note reaches it when one exists
+ * (lifecycle-gap.ts).
  *
  * Scope, stated honestly: a socket does not stay open while hidden. The renderer
  * still arms its reconnect timer before the constructor runs; the dial itself is
@@ -33,7 +35,6 @@ import { reportLifecycleGap, resetLifecycleGapForTests } from './lifecycle-gap'
 
 /** The subset of WebSocket this module relies on. */
 export interface SocketLike {
-  readyState: number
   close(code?: number, reason?: string): void
   addEventListener(type: string, listener: () => void): void
 }
@@ -99,6 +100,9 @@ export function onSocketCreated(observer: Observer): () => void {
  * well as the socket registry, so nothing in the app may use it.
  */
 export function resetSocketLifecycleForTests(): void {
+  // It ships in the bundle, so make a mistaken call from app code fail loudly in a
+  // production build instead of silently opening the gate (round 8).
+  if (import.meta.env.PROD) throw new Error('resetSocketLifecycleForTests is test-only')
   suspended = false
   live.clear()
   observers.clear()

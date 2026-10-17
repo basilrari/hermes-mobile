@@ -109,7 +109,11 @@ export function onAppStateChange(callback: (active: boolean) => void): () => voi
   // release build; `console.*` is not (lifecycle-gap.ts).
   const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive)).catch(
     (err: unknown) => {
-      reportLifecycleGap(`appStateChange did not register: socket will stay open while hidden (${String(err)})`)
+      // The error's name only: `String(err)` is free-form, and this channel ends up
+      // in a trace buffer that can be shared off the device.
+      reportLifecycleGap(
+        `appStateChange did not register: socket will stay open while hidden (${err instanceof Error ? err.name : typeof err})`,
+      )
       return null
     },
   )

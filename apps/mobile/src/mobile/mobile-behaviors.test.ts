@@ -40,7 +40,7 @@ vi.mock('@capacitor/keyboard', () => ({
 
 import { installSocketLifecycle, isSuspended, resetSocketLifecycleForTests, setSuspended } from '~bridge/socket-lifecycle'
 import { translateNow } from '@/i18n'
-import { $notifications } from '@/store/notifications'
+import { $notifications, notify } from '@/store/notifications'
 
 import { MobileBehaviors } from './mobile-behaviors'
 
@@ -81,15 +81,19 @@ function lifecycleWindow() {
   return { win, created }
 }
 
-/** The sticky escalation toast the boot hook raises while the ladder fails. */
-function lossAlert(id: string) {
-  return {
-    id,
-    kind: 'warning' as const,
+/**
+ * The sticky escalation toast the boot hook raises while the ladder fails
+ * (`use-gateway-boot.ts:597-608`), raised through the real store so the test also
+ * pins what `notify()` does to `createdAt` — a fabricated alert hid that contract
+ * (round 8).
+ */
+function raiseLossAlert(): string {
+  return notify({
+    kind: 'warning',
     title: translateNow('boot.errors.gatewayConnectionLost'),
-    message: 'Hermes lost its connection',
-    createdAt: Date.now() + 1,
-  }
+    message: translateNow('boot.errors.gatewayConnectionLostDetail'),
+    durationMs: 0,
+  })
 }
 
 beforeEach(() => {
@@ -144,13 +148,13 @@ describe('the connection-lost toast is dismissed only on recovery (HM-32)', () =
 
     // The escalation fires while hidden (300 s of suppressed ladder steps) and
     // the gateway is genuinely dead, so nothing opens on resume.
-    $notifications.set([lossAlert('lost')])
+    const id = raiseLossAlert()
 
     act(() => appState()({ isActive: true }))
 
     // Coming back on screen is not evidence of recovery: the toast is the only
     // actionable thing the user has, and the next escalation is ~300 s away.
-    expect($notifications.get().map((n) => n.id)).toEqual(['lost'])
+    expect($notifications.get().map((n) => n.id)).toEqual([id])
     view.unmount()
   })
 
@@ -159,7 +163,7 @@ describe('the connection-lost toast is dismissed only on recovery (HM-32)', () =
     installSocketLifecycle(win as never)
     const view = mount()
     act(() => appState()({ isActive: false }))
-    $notifications.set([lossAlert('lost')])
+    raiseLossAlert()
 
     // The post-resume dial succeeds: an open socket is proof, not a proxy.
     const Socket = win.WebSocket as unknown as new (url: string) => { fire: (t: string) => void }

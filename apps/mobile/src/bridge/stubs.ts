@@ -9,10 +9,13 @@
  * methods return a real unsubscribe.
  */
 
+import { isSuspended } from './socket-lifecycle'
+
 const noopUnsub = (): void => {}
 
-// A tiny "already booted, nothing to do" progress object.
-const readyBoot = {
+// A tiny "already booted, nothing to do" progress object. `retryable` is optional
+// so the gate branch below keeps the same shape (see getBootProgress).
+const readyBoot: { retryable?: boolean } & Record<string, unknown> = {
   error: null,
   fakeMode: false,
   message: 'Connected',
@@ -36,7 +39,13 @@ export function makeStubs() {
     openNewSessionWindow: async () => unsupportedWindow,
 
     // Boot / bootstrap: there is no local backend to install on a phone.
-    getBootProgress: async () => readyBoot,
+    // `retryable` is what `bootFailureIsRetryable` reads (use-gateway-boot.ts).
+    // A boot dial refused by the HM-32 gate is transient by definition: the app
+    // is backgrounded, not broken, so the boot must wait for the next visible
+    // moment instead of failing with a sticky "Hermes couldn't start" toast whose
+    // detail line is the internal suppression string. Left `undefined` (the
+    // previous value) whenever the gate is not the cause.
+    getBootProgress: async () => (isSuspended() ? { ...readyBoot, retryable: true } : readyBoot),
     onBootProgress: () => noopUnsub,
     getBootstrapState: async () => ({
       active: false,

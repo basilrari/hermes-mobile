@@ -12,9 +12,10 @@
  * The headless harness reads `window.__hermesRpcTrace`; on the tablet a
  * long-press on the version badge shares the same text (TraceBadge.tsx).
  *
- * Enabled by default in debug builds. A release build is produced with
- * `VITE_HERMES_TRACE=false`, which leaves the whole module inert (no buffer, no
- * WebSocket wrap, no global).
+ * Enabled by default. `VITE_HERMES_TRACE=false` leaves the whole module inert
+ * (no buffer, no WebSocket wrap, no global); that is the documented release knob,
+ * and nothing in this repo sets it, so a plain `vite build` ships the trace. The
+ * socket-lifecycle control must therefore work whether or not the trace is on.
  */
 
 import { onLifecycleGap } from './lifecycle-gap'
