@@ -4,14 +4,16 @@ const config: CapacitorConfig = {
   appId: 'io.github.basilrari.hermesmobile',
   appName: 'Hermes',
   webDir: 'dist',
-  // loggingBehavior is deliberately left at Capacitor's default ('debug').
-  // 'production' would make the socket-lifecycle warns reach logcat in the
-  // shipping APK, but it sets `loggingEnabled = true` for the WHOLE bridge:
-  // `Bridge.callPluginMethod` then logs every plugin payload, and that payload is
-  // the CapacitorHttp request (Cookie / X-Hermes-Session-Token headers and the
-  // login password body) plus the saved-token Preferences values. The
-  // "control switched itself off" signal goes through the RPC trace instead —
-  // metadata only — see src/bridge/lifecycle-gap.ts.
+  // Bridge-wide logging is OFF, on every build type. `CapConfig.java` maps
+  // 'production' -> loggingEnabled = true, 'none' -> false, and a missing key (or
+  // 'debug') -> `isDebug`, which is TRUE in a debuggable APK — and this repo only
+  // builds `assembleDebug`. With the logger on, `Bridge.callPluginMethod` writes
+  // every plugin payload to logcat: the CapacitorHttp request (Cookie /
+  // X-Hermes-Session-Token headers and the login password body) plus the
+  // saved-token Preferences values. So 'none' is the only value that is off in the
+  // APK we actually produce. The "control switched itself off" signal goes through
+  // the RPC trace instead — metadata only — see src/bridge/lifecycle-gap.ts.
+  loggingBehavior: 'none',
   // CapacitorHttp routes the bridge's REST calls (login + ws-ticket) through
   // the NATIVE HTTP stack, which bypasses the browser CORS that the gateway
   // locks to localhost — the whole reason a plain PWA can't talk to a remote

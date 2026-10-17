@@ -4,11 +4,14 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * The one invariant in this PR whose regression leaks credentials: `loggingBehavior`
- * left at Capacitor's default. `'production'` sets `loggingEnabled = true` for the
- * whole bridge, and `Bridge.callPluginMethod` then writes every plugin payload —
- * the CapacitorHttp `Cookie` / `X-Hermes-Session-Token` headers and the login
- * password body — to logcat on the shipping APK.
+ * The one invariant in this PR whose regression leaks credentials: bridge-wide
+ * logging must resolve to off. `CapConfig.java` maps `'production'` to
+ * `loggingEnabled = true`, `'none'` to false, and a missing key (or `'debug'`) to
+ * `isDebug` — true in a debuggable APK, and `assembleDebug` is the only build this
+ * repo produces. With the logger on, `Bridge.callPluginMethod` writes every plugin
+ * payload — the CapacitorHttp `Cookie` / `X-Hermes-Session-Token` headers and the
+ * login password body — to logcat. So the source must say `'none'`; an absent key
+ * is the leak, not the safe default (round 14).
  *
  * Read as text, not imported: `capacitor.config.ts` sits outside
  * `tsconfig.app.json`'s include and carries three pre-existing enum-literal
@@ -37,16 +40,22 @@ function activeSource(): string {
   return stripComments(fs.readFileSync(configPath, 'utf8'))
 }
 
-const KEY = /\bloggingBehavior\s*:/
+const KEY = /\bloggingBehavior\s*:\s*(['"])([^'"]*)\1/
+
+/** The `loggingBehavior` value in a config source, or `undefined` if absent. */
+export function loggingBehaviorOf(source: string): string | undefined {
+  return KEY.exec(stripComments(source))?.[2]
+}
 
 describe('capacitor config (HM-32 credential guard)', () => {
-  it('does not turn on bridge-wide logging', () => {
-    expect(activeSource()).not.toMatch(KEY)
+  it("sets loggingBehavior to 'none', the only value that is off in a debug APK", () => {
+    expect(loggingBehaviorOf(activeSource())).toBe('none')
   })
 
-  it('ignores the key in a comment and still sees it in code', () => {
-    expect(stripComments("/* never set loggingBehavior: 'production' */")).not.toMatch(KEY)
-    expect(stripComments("  webDir: 'dist', // keep loggingBehavior: 'production' out")).not.toMatch(KEY)
-    expect(stripComments("  loggingBehavior: 'production',")).toMatch(KEY)
+  it('reads the value from code, not from a comment', () => {
+    expect(loggingBehaviorOf("/* never set loggingBehavior: 'production' */ webDir: 'dist'")).toBe(undefined)
+    expect(loggingBehaviorOf("  webDir: 'dist', // keep loggingBehavior: 'production' out")).toBe(undefined)
+    expect(loggingBehaviorOf("  loggingBehavior: 'production',")).toBe('production')
+    expect(loggingBehaviorOf('  loggingBehavior: "none",')).toBe('none')
   })
 })

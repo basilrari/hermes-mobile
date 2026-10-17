@@ -1,9 +1,11 @@
 /**
  * Assert the SYNCED Capacitor config does not turn on bridge-wide logging (HM-32).
  *
- * `capacitor.config.ts` leaves `loggingBehavior` at Capacitor's default on purpose:
- * `'production'` sets `loggingEnabled = true` for the whole bridge and
- * `Bridge.callPluginMethod` then writes every plugin payload to logcat — the
+ * `loggingBehavior: 'none'` is the only value that leaves bridge logging off on
+ * every build type: `'production'` sets `loggingEnabled = true`, `'none'` sets it
+ * false, and `'debug'` (the default when the key is absent) sets it to `isDebug` —
+ * which is TRUE on `assembleDebug`, the only APK this repo builds. With the logger
+ * on, `Bridge.callPluginMethod` writes every plugin payload to logcat — the
  * CapacitorHttp request headers (`Cookie`, `X-Hermes-Session-Token`) and the login
  * password body. That is the only credential path in this app's config.
  *
@@ -45,44 +47,52 @@ try {
   process.exit(1)
 }
 
-// Only `'production'` turns bridge-wide logging ON (`CapConfig.java`):
-//   'production' → loggingEnabled = true
-//   'none'       → loggingEnabled = false
-//   'debug'      → loggingEnabled = isDebug   (false on a non-debuggable APK)
-// So `'debug'` and `'none'` are safe values a developer may write explicitly, and
-// only `'production'` — or any value this file does not know — is a failure. A
-// false red on a safe value is how people learn to route around a guard.
-const SAFE_BEHAVIORS = new Set(['debug', 'none'])
+// `CapConfig.java` (android 8.5.3) does:
+//   'production' -> loggingEnabled = true
+//   'none'       -> loggingEnabled = false
+//   default      -> loggingEnabled = isDebug  (FLAG_DEBUGGABLE)
+// and `package.json` only ever builds `assembleDebug`, which is debuggable by
+// definition. So 'debug' and an absent key both turn the payload logger ON in the
+// only APK this repo produces; 'none' is the one value that is off everywhere.
+const SAFE_BEHAVIOR = 'none'
 const DEFAULT_BEHAVIOR = 'debug'
 
-// Both keys are checked, because the native side prefers the nested one:
-// `CapConfig.java` reads `android.loggingBehavior` first and falls back to
-// `loggingBehavior`, and `cli/tasks/copy.js` writes the whole `extConfig` into the
-// artefact verbatim — so `{"android":{"loggingBehavior":"production"}}` reaches
-// release logcat. A top-level-only guard passes that shape (round 11).
-const keys =
-  config !== null && typeof config === 'object'
-    ? [
-        ['loggingBehavior', config.loggingBehavior],
-        ['android.loggingBehavior', config.android?.loggingBehavior],
-      ]
-    : []
-
-const setting = keys.find(([, value]) => value !== undefined)
-const leaking = keys.find(([, value]) => value !== undefined && !SAFE_BEHAVIORS.has(String(value)))
-
-if (leaking) {
-  const [key, value] = leaking
+if (config === null || typeof config !== 'object' || Array.isArray(config)) {
   console.error(
-    `capacitor config check: the synced config sets ${key}=${JSON.stringify(value)}.\n` +
-      "Only Capacitor's safe values ('debug' — the default — and 'none') leave bridge-wide logging\n" +
-      'off. Anything else puts the CapacitorHttp Cookie / X-Hermes-Session-Token headers and the\n' +
-      'login password body in release logcat. Leave the key unset in capacitor.config.ts and re-run\n' +
-      '`cap sync`.',
+    `capacitor config check: ${artefact} is not a config object (${JSON.stringify(config)?.slice(0, 40)}).\n` +
+      'That is a broken `cap sync` output, not a setting — re-run `npm run cap:sync`.',
   )
   process.exit(1)
 }
 
-console.log(
-  `capacitor config check: loggingBehavior stays off (${setting ? `${setting[0]}=${JSON.stringify(setting[1])}` : `no key, default '${DEFAULT_BEHAVIOR}'`})`,
-)
+// `CapConfig.java` resolves `android.loggingBehavior` FIRST and falls back to the
+// top-level key, and `cli/tasks/copy.js` writes the whole extConfig verbatim — so
+// the nested key is the one that decides, and a top-level-only reading can be a
+// false green (round 11) or a false red on the safer shape (round 13).
+const nested = config.android?.loggingBehavior
+const effective = nested !== undefined ? nested : config.loggingBehavior
+const effectiveKey = nested !== undefined ? 'android.loggingBehavior' : 'loggingBehavior'
+
+if (effective === undefined) {
+  console.error(
+    `capacitor config check: the synced config sets no loggingBehavior, so Capacitor falls back to\n` +
+      `'${DEFAULT_BEHAVIOR}' (loggingEnabled = isDebug) — which is ON in a debug APK, and \`assembleDebug\`\n` +
+      'is the only build this repo produces. That puts the CapacitorHttp Cookie /\n' +
+      'X-Hermes-Session-Token headers and the login password body in logcat. Set\n' +
+      "`loggingBehavior: 'none'` in capacitor.config.ts and re-run `cap sync`.",
+  )
+  process.exit(1)
+}
+
+if (String(effective) !== SAFE_BEHAVIOR) {
+  console.error(
+    `capacitor config check: the synced config resolves ${effectiveKey}=${JSON.stringify(effective)}.\n` +
+      `On a debug APK only '${SAFE_BEHAVIOR}' leaves bridge logging off ('debug' sets loggingEnabled =\n` +
+      'isDebug, and `assembleDebug` is the only build this repo makes). Anything else puts the\n' +
+      'CapacitorHttp Cookie / X-Hermes-Session-Token headers and the login password body in\n' +
+      "release logcat. Set `loggingBehavior: 'none'` in capacitor.config.ts and re-run `cap sync`.",
+  )
+  process.exit(1)
+}
+
+console.log(`capacitor config check: bridge logging off on every build type (${effectiveKey}=${JSON.stringify(effective)})`)

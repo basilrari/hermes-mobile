@@ -2,10 +2,16 @@
  * Pins the exit codes of `scripts/check-capacitor-config.mjs` (HM-32, round 11).
  *
  * That script guards the one invariant in this branch whose regression puts the
- * session token and the login password into release logcat, and it is otherwise
- * untested: `capacitor.config.ts` sits outside this project's `tsconfig`, and the
+ * session token and the login password into logcat, and it is otherwise untested:
+ * `capacitor.config.ts` sits outside this project's `tsconfig`, and the
  * artefact it reads is git-ignored, so no other test and no diff can see it. A
  * guard that can silently become a no-op is not a guard.
+ *
+ * The rule is `'none'` and nothing else: `CapConfig.java` maps `'production'` to
+ * `loggingEnabled = true`, `'none'` to false, and a missing key or `'debug'` to
+ * `isDebug` — true in a debuggable APK, and `assembleDebug` is the only build this
+ * repo produces. The nested `android.loggingBehavior` key wins over the top-level
+ * one in `CapConfig.java`, and `cap sync` writes both through verbatim.
  *
  * The script takes an optional fixture path as its first argument so these cases
  * can drive it without touching a real synced artefact.
@@ -37,21 +43,23 @@ function run(contents: string | null, name: string): { status: number; stderr: s
 }
 
 describe('scripts/check-capacitor-config.mjs (HM-32)', () => {
-  it('passes on a synced config with no loggingBehavior key', () => {
-    const result = run('{"appId":"io.github.basilrari.hermesmobile"}', 'clean.json')
+  it("passes on the value the app sets: 'none'", () => {
+    const result = run('{"loggingBehavior":"none"}', 'none.json')
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain('loggingBehavior stays off')
+    expect(result.stdout).toContain('bridge logging off')
   })
 
-  it("passes on Capacitor's own default, because writing it is a no-op", () => {
-    expect(run('{"loggingBehavior":"debug"}', 'debug.json').status).toBe(0)
+  it('fails when the key is absent, because the default is ON in a debug APK', () => {
+    const result = run('{"appId":"io.github.basilrari.hermesmobile"}', 'clean.json')
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('no loggingBehavior')
   })
 
-  it("passes on 'none', which turns bridge logging off outright", () => {
-    expect(run('{"loggingBehavior":"none"}', 'none.json').status).toBe(0)
+  it("fails on 'debug', which is isDebug and therefore on in a debuggable APK", () => {
+    expect(run('{"loggingBehavior":"debug"}', 'debug.json').status).toBe(1)
   })
 
-  it('fails on a value that turns bridge-wide logging on', () => {
+  it("fails on 'production'", () => {
     const result = run('{"loggingBehavior":"production"}', 'production.json')
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('loggingBehavior="production"')
@@ -68,11 +76,26 @@ describe('scripts/check-capacitor-config.mjs (HM-32)', () => {
 
   it('passes on a nested key that is off, and on an android block without one', () => {
     expect(run('{"android":{"loggingBehavior":"none"}}', 'nested-none.json').status).toBe(0)
-    expect(run('{"android":{"buildOptions":{}}}', 'android-no-key.json').status).toBe(0)
+    expect(run('{"loggingBehavior":"none","android":{"buildOptions":{}}}', 'android-no-key.json').status).toBe(0)
+  })
+
+  it('judges the effective value when both keys are present', () => {
+    // The nested key wins, so a stale top-level 'production' under a nested 'none'
+    // is not a leak — and a red there would send the reader to the wrong key.
+    expect(run('{"loggingBehavior":"production","android":{"loggingBehavior":"none"}}', 'both-safe.json').status).toBe(0)
+    expect(run('{"loggingBehavior":"none","android":{"loggingBehavior":"production"}}', 'both-leaky.json').status).toBe(1)
   })
 
   it('fails closed on a value it does not recognise', () => {
     expect(run('{"android":{"loggingBehavior":"verbose"}}', 'unknown.json').status).toBe(1)
+  })
+
+  it('fails when the artefact is not a config object', () => {
+    // A truncated or wrong-shaped `cap sync` output must not read as "no key".
+    const nullRoot = run('null', 'null.json')
+    expect(nullRoot.status).toBe(1)
+    expect(nullRoot.stderr).toContain('is not a config object')
+    expect(run('[]', 'array.json').stderr).toContain('is not a config object')
   })
 
   it('fails when the artefact is missing rather than skipping', () => {

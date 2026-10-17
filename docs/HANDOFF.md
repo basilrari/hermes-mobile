@@ -102,7 +102,7 @@ npm test            # vitest (bridge) + scripts/check-legacy-app-id.mjs
 npm run typecheck   # tsc -p tsconfig.app.json --noEmit
 ```
 
-On `main` after #51, `npm test` reports **98 passing tests in 8 files** (was 39 in 3 before the M0/M1 work).
+On this branch after #56, `apps/mobile`'s `npm test` reports **165 passing tests in 18 files** (98 in 8 on `main` after #51; 39 in 3 before the M0/M1 work).
 
 Pitfall: `apps/mobile/android/app/src/main/assets/capacitor.config.json` is generated and git-ignored. In a checkout that was synced before #34, it still holds the old app ID, and the app-ID check in `npm test` fails with `expected exactly one hit, in README.md; found 2`. Run `npm run sync:android` from the repo root (Node 22+) to regenerate it; that script, and `npm run cap:sync` inside `apps/mobile`, also run `scripts/check-capacitor-config.mjs`, which fails if the synced config gained a `loggingBehavior`.
 
