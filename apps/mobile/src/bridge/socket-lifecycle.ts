@@ -93,6 +93,38 @@ export function onSocketCreated(observer: Observer): () => void {
 }
 
 /**
+ * When the HM-32 gate last refused a dial (epoch ms). The gate lives in
+ * `connection.ts` and the boot loop only ever sees the thrown failure, so this
+ * is how "refused by the gate" is told apart from every other boot failure.
+ * `isSuspended()` alone cannot do it: it answers for the whole hidden window, so
+ * a genuine 401 during a backgrounded boot would be classified as transient and
+ * take the retry loop the vendored hook reserves for remote faults.
+ */
+let dialSuppressedAtMs = 0
+
+/**
+ * How long a gate refusal stays attributable to the attempt being classified.
+ * The gate throws and the boot hook's catch reads this in the same tick, so a
+ * couple of seconds is generous; an older mark belongs to an earlier attempt.
+ */
+export const DIAL_SUPPRESSED_FRESH_MS = 2_000
+
+/** Record a refused dial. Called by the gate itself, nowhere else. */
+export function noteDialSuppressed(nowMs = Date.now()): void {
+  dialSuppressedAtMs = nowMs
+}
+
+/** A dial that passed the gate clears the mark: it then describes the last attempt only. */
+export function clearDialSuppressed(): void {
+  dialSuppressedAtMs = 0
+}
+
+/** True when a dial refusal is recent enough to be the current failure. */
+export function dialSuppressedRecently(nowMs = Date.now(), withinMs = DIAL_SUPPRESSED_FRESH_MS): boolean {
+  return dialSuppressedAtMs !== 0 && nowMs - dialSuppressedAtMs <= withinMs
+}
+
+/**
  * Drop tracked sockets, the suspension flag, and observers. Tests share this
  * module's globals; a window-local install flag does not reset them.
  *
@@ -104,6 +136,7 @@ export function resetSocketLifecycleForTests(): void {
   // production build instead of silently opening the gate (round 8).
   if (import.meta.env.PROD) throw new Error('resetSocketLifecycleForTests is test-only')
   suspended = false
+  dialSuppressedAtMs = 0
   live.clear()
   observers.clear()
   warnedMissingConstructor = false

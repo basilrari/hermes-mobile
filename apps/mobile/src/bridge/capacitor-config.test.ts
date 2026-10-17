@@ -19,17 +19,34 @@ import { describe, expect, it } from 'vitest'
  */
 const configPath = fileURLToPath(new URL('../../capacitor.config.ts', import.meta.url))
 
-/** The file without comment lines, so the rationale comment cannot match the key. */
-function activeSource(): string {
-  return fs
-    .readFileSync(configPath, 'utf8')
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('//'))
-    .join('\n')
+/**
+ * Strip what cannot be a setting: block comments, and `//` comments that start a
+ * line or follow whitespace. The rationale comment beside the setting names it, so
+ * a guard that ignored comments would go red on prose — the wrong report. Where
+ * the heuristic is ambiguous it strips nothing, so the failure mode is a false red,
+ * never a false green.
+ */
+export function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\s)\/\/[^\n]*/g, '$1')
 }
+
+/** The config with comments removed, so prose cannot satisfy or trip the guard. */
+function activeSource(): string {
+  return stripComments(fs.readFileSync(configPath, 'utf8'))
+}
+
+const KEY = /\bloggingBehavior\s*:/
 
 describe('capacitor config (HM-32 credential guard)', () => {
   it('does not turn on bridge-wide logging', () => {
-    expect(activeSource()).not.toMatch(/\bloggingBehavior\s*:/)
+    expect(activeSource()).not.toMatch(KEY)
+  })
+
+  it('ignores the key in a comment and still sees it in code', () => {
+    expect(stripComments("/* never set loggingBehavior: 'production' */")).not.toMatch(KEY)
+    expect(stripComments("  webDir: 'dist', // keep loggingBehavior: 'production' out")).not.toMatch(KEY)
+    expect(stripComments("  loggingBehavior: 'production',")).toMatch(KEY)
   })
 })

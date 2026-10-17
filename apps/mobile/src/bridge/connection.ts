@@ -12,7 +12,7 @@ import type { HermesConnection } from '@/global'
 
 import { mintWsTicket } from './auth'
 import { buildGatewayWsUrl, buildGatewayWsUrlWithTicket } from './connection-config'
-import { isSuspended } from './socket-lifecycle'
+import { clearDialSuppressed, isSuspended, noteDialSuppressed } from './socket-lifecycle'
 import { awaitTarget } from './state'
 
 function requireTarget() {
@@ -66,7 +66,16 @@ export async function getGatewayWsUrl(): Promise<string> {
   // flag — `mobile-behaviors.tsx` owns `appStateChange` and calls
   // `setSuspended(false)` on resume, on mount and on unmount, after which the
   // next attempt resolves normally (measured: 3ms after `visibilitychange`).
-  if (isSuspended()) throw new GatewayDialSuppressed()
+  // The refusal is recorded as well as thrown: this is the only place that knows
+  // the dial was suppressed, and the boot hook's retry decision only sees the
+  // failure (`getBootProgress().retryable` in stubs.ts).
+  if (isSuspended()) {
+    noteDialSuppressed()
+    throw new GatewayDialSuppressed()
+  }
+  // A dial that got past the gate clears the mark, so it describes the LAST
+  // attempt rather than any refusal the boot hook might still be looking at.
+  clearDialSuppressed()
   const target = await requireTarget()
   if (target.authMode === 'oauth') {
     const ticket = await mintWsTicket(target.baseUrl)

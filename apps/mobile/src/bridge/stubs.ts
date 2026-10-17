@@ -9,7 +9,7 @@
  * methods return a real unsubscribe.
  */
 
-import { isSuspended } from './socket-lifecycle'
+import { dialSuppressedRecently } from './socket-lifecycle'
 
 const noopUnsub = (): void => {}
 
@@ -40,12 +40,23 @@ export function makeStubs() {
 
     // Boot / bootstrap: there is no local backend to install on a phone.
     // `retryable` is what `bootFailureIsRetryable` reads (use-gateway-boot.ts).
-    // A boot dial refused by the HM-32 gate is transient by definition: the app
-    // is backgrounded, not broken, so the boot must wait for the next visible
-    // moment instead of failing with a sticky "Hermes couldn't start" toast whose
-    // detail line is the internal suppression string. Left `undefined` (the
-    // previous value) whenever the gate is not the cause.
-    getBootProgress: async () => (isSuspended() ? { ...readyBoot, retryable: true } : readyBoot),
+    // A boot dial refused by the HM-32 gate is transient, so the boot takes the
+    // hook's retry loop instead of failing with a sticky "Hermes couldn't start"
+    // toast whose detail line is the internal suppression string.
+    //
+    // Cause, not time: `isSuspended()` answers for the whole hidden window, so it
+    // would also make a genuine 401 during a backgrounded boot look transient —
+    // the one class the hook reserves for remote faults. The gate records its own
+    // refusal (connection.ts → noteDialSuppressed), and only a refusal fresh
+    // enough to belong to this failure counts.
+    //
+    // Reach, honestly: that loop is 5 attempts at full jitter with ceilings
+    // 2/4/8/15/15 s, so it bridges ~22 s typically and 44 s worst case. A phone
+    // left hidden longer still reaches `failDesktopBoot` on return; BootAutoRetry
+    // (`app.tsx`) then reloads, which resets the gate and recovers. Widening the
+    // budget itself would need a vendored patch.
+    // Left `undefined` (the previous value) for every other failure.
+    getBootProgress: async () => (dialSuppressedRecently() ? { ...readyBoot, retryable: true } : readyBoot),
     onBootProgress: () => noopUnsub,
     getBootstrapState: async () => ({
       active: false,
