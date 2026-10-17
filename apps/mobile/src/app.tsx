@@ -142,7 +142,7 @@ function BootAutoRetry() {
         // HM-32: a reload re-runs the bridge modules, so the suspend gate starts
         // `false` again. Reloading while hidden would let the next boot dial, mint
         // a ticket and hold that socket for the rest of the hidden window — so wait
-        // for the screen instead (`boot-reload.ts`).
+        // for the screen instead, bounded at 60 s (`boot-reload.ts`).
         cancelReload.current = reloadWhenVisible()
       }, 1100)
       return () => {

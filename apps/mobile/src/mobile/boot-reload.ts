@@ -11,10 +11,12 @@
  * path (round 10).
  *
  * So: reload now if the app is visible, otherwise wait for the next
- * `visibilitychange` that reports visible — with a bounded fallback
- * (`HIDDEN_RELOAD_FALLBACK_MS`) so a platform that never reports visible cannot
- * leave the boot parked on the cover forever. Returns an unsubscribe for the
- * waiter; the caller must use it if the boot recovers by another route.
+ * `visibilitychange` that reports visible. The wait is bounded rather than open
+ * (`HIDDEN_RELOAD_FALLBACK_MS`): the fallback fires whether the signal is
+ * missing or the app is simply still hidden, because a boot parked on the cover
+ * with nothing scheduled is worse than the one dial it costs. Returns an
+ * unsubscribe for the waiter; the caller must use it if the boot recovers by
+ * another route.
  *
  * `document.visibilityState` is the signal `@capacitor/app`'s own web
  * implementation maps to `appStateChange`, so this module reads the same truth
@@ -27,7 +29,7 @@ export interface ReloadWindow {
 
 const noop = (): void => {}
 
-/** How long a deferred reload waits for the screen before reloading anyway. */
+/** Upper bound on the deferred wait, in ms, before reloading anyway. */
 export const HIDDEN_RELOAD_FALLBACK_MS = 60_000
 
 export function reloadWhenVisible(
@@ -58,11 +60,11 @@ export function reloadWhenVisible(
     reload()
   }
   win.document.addEventListener('visibilitychange', onVisible)
-  // Bounded fallback: if the platform never reports visible (a WebView that does
-  // not flip `visibilityState` on resume, an OEM launcher), waiting forever leaves
-  // the boot stuck behind the "Reconnecting…" cover with its retry budget unspent
-  // and nothing scheduled (round 11). One dial after a minute hidden is the cheaper
-  // failure — the same dial this branch already accepts elsewhere.
+  // Bounded fallback: an open-ended wait leaves the boot stuck behind the
+  // "Reconnecting…" cover with its retry budget unspent and nothing scheduled if
+  // the platform never reports visible (a WebView that does not flip
+  // `visibilityState` on resume, an OEM launcher). One dial after a minute is the
+  // cheaper failure — the same dial this branch already accepts elsewhere (round 11).
   timer = setTimeout(reload, fallbackMs)
   return stop
 }

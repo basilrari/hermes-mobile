@@ -40,17 +40,39 @@ describe('scripts/check-capacitor-config.mjs (HM-32)', () => {
   it('passes on a synced config with no loggingBehavior key', () => {
     const result = run('{"appId":"io.github.basilrari.hermesmobile"}', 'clean.json')
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain('bridge logging stays off')
+    expect(result.stdout).toContain('loggingBehavior stays off')
   })
 
   it("passes on Capacitor's own default, because writing it is a no-op", () => {
     expect(run('{"loggingBehavior":"debug"}', 'debug.json').status).toBe(0)
   })
 
+  it("passes on 'none', which turns bridge logging off outright", () => {
+    expect(run('{"loggingBehavior":"none"}', 'none.json').status).toBe(0)
+  })
+
   it('fails on a value that turns bridge-wide logging on', () => {
     const result = run('{"loggingBehavior":"production"}', 'production.json')
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('loggingBehavior="production"')
+  })
+
+  it('fails on the nested android key the native side prefers', () => {
+    // `CapConfig.java` reads `android.loggingBehavior` before `loggingBehavior`,
+    // and `cap sync` writes the whole extConfig verbatim — a top-level-only check
+    // passes this shape and leaks.
+    const result = run('{"android":{"loggingBehavior":"production"}}', 'nested-production.json')
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('android.loggingBehavior="production"')
+  })
+
+  it('passes on a nested key that is off, and on an android block without one', () => {
+    expect(run('{"android":{"loggingBehavior":"none"}}', 'nested-none.json').status).toBe(0)
+    expect(run('{"android":{"buildOptions":{}}}', 'android-no-key.json').status).toBe(0)
+  })
+
+  it('fails closed on a value it does not recognise', () => {
+    expect(run('{"android":{"loggingBehavior":"verbose"}}', 'unknown.json').status).toBe(1)
   })
 
   it('fails when the artefact is missing rather than skipping', () => {

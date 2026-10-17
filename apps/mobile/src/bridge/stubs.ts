@@ -53,9 +53,10 @@ export function makeStubs() {
     // Reach, honestly: that loop is 5 attempts at full jitter with ceilings
     // 2/4/8/15/15 s, so it bridges ~22 s typically and 44 s worst case. A phone
     // left hidden longer still reaches `failDesktopBoot` while it is hidden;
-    // BootAutoRetry (`app.tsx`) then waits for the screen before reloading
-    // (`boot-reload.ts`, with a 60 s fallback), and that reload starts a fresh
-    // bridge — gate `false` again — so the app dials once it is visible.
+    // BootAutoRetry (`app.tsx`) then holds the reload until the screen is back
+    // (`boot-reload.ts`), bounded at 60 s. That reload starts a fresh bridge —
+    // gate `false` again — so the app dials as soon as it is visible; if the
+    // bound expires first it reloads and dials once while still hidden.
     // Widening the budget itself would need a vendored patch.
     // Left `undefined` (the previous value) for every other failure.
     getBootProgress: async () => (dialSuppressedRecently() ? { ...readyBoot, retryable: true } : readyBoot),

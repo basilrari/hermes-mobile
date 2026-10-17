@@ -45,22 +45,44 @@ try {
   process.exit(1)
 }
 
-// `'debug'` IS Capacitor's default (`CapConfig` sets `loggingEnabled = isDebug`,
-// false on a non-debuggable APK), so writing it explicitly is a no-op and must not
-// fail here — a false red on a safe value teaches people to work around the guard.
-if (
-  config !== null &&
-  typeof config === 'object' &&
-  'loggingBehavior' in config &&
-  config.loggingBehavior !== 'debug'
-) {
+// Only `'production'` turns bridge-wide logging ON (`CapConfig.java`):
+//   'production' → loggingEnabled = true
+//   'none'       → loggingEnabled = false
+//   'debug'      → loggingEnabled = isDebug   (false on a non-debuggable APK)
+// So `'debug'` and `'none'` are safe values a developer may write explicitly, and
+// only `'production'` — or any value this file does not know — is a failure. A
+// false red on a safe value is how people learn to route around a guard.
+const SAFE_BEHAVIORS = new Set(['debug', 'none'])
+const DEFAULT_BEHAVIOR = 'debug'
+
+// Both keys are checked, because the native side prefers the nested one:
+// `CapConfig.java` reads `android.loggingBehavior` first and falls back to
+// `loggingBehavior`, and `cli/tasks/copy.js` writes the whole `extConfig` into the
+// artefact verbatim — so `{"android":{"loggingBehavior":"production"}}` reaches
+// release logcat. A top-level-only guard passes that shape (round 11).
+const keys =
+  config !== null && typeof config === 'object'
+    ? [
+        ['loggingBehavior', config.loggingBehavior],
+        ['android.loggingBehavior', config.android?.loggingBehavior],
+      ]
+    : []
+
+const setting = keys.find(([, value]) => value !== undefined)
+const leaking = keys.find(([, value]) => value !== undefined && !SAFE_BEHAVIORS.has(String(value)))
+
+if (leaking) {
+  const [key, value] = leaking
   console.error(
-    `capacitor config check: the synced config sets loggingBehavior=${JSON.stringify(config.loggingBehavior)}.\n` +
-      "Any value other than Capacitor's default ('debug') turns on bridge-wide logging, which puts the\n" +
-      'CapacitorHttp Cookie / X-Hermes-Session-Token headers and the login password body in\n' +
-      "release logcat. Leave it unset in capacitor.config.ts and re-run `cap sync`.",
+    `capacitor config check: the synced config sets ${key}=${JSON.stringify(value)}.\n` +
+      "Only Capacitor's safe values ('debug' — the default — and 'none') leave bridge-wide logging\n" +
+      'off. Anything else puts the CapacitorHttp Cookie / X-Hermes-Session-Token headers and the\n' +
+      'login password body in release logcat. Leave the key unset in capacitor.config.ts and re-run\n' +
+      '`cap sync`.',
   )
   process.exit(1)
 }
 
-console.log('capacitor config check: no loggingBehavior in the synced config — bridge logging stays off')
+console.log(
+  `capacitor config check: loggingBehavior stays off (${setting ? `${setting[0]}=${JSON.stringify(setting[1])}` : `no key, default '${DEFAULT_BEHAVIOR}'`})`,
+)
