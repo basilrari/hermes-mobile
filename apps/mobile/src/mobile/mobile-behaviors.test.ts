@@ -38,7 +38,9 @@ vi.mock('@capacitor/keyboard', () => ({
   },
 }))
 
-import { isSuspended, resetSocketLifecycleForTests, setSuspended } from '~bridge/socket-lifecycle'
+import { installSocketLifecycle, isSuspended, resetSocketLifecycleForTests, setSuspended } from '~bridge/socket-lifecycle'
+import { translateNow } from '@/i18n'
+import { $notifications } from '@/store/notifications'
 
 import { MobileBehaviors } from './mobile-behaviors'
 
@@ -53,14 +55,53 @@ function mount() {
   return render(createElement(MemoryRouter, null, createElement(MobileBehaviors)))
 }
 
+/** A window whose WebSocket records itself and can fire `open`/`close`. */
+function lifecycleWindow() {
+  const created: { fire: (type: string) => void }[] = []
+  const win = {
+    WebSocket: function () {
+      const handlers = new Map<string, Array<() => void>>()
+      const socket = {
+        readyState: 1,
+        close() {
+          socket.readyState = 3
+          socket.fire('close')
+        },
+        addEventListener(type: string, fn: () => void) {
+          handlers.set(type, [...(handlers.get(type) ?? []), fn])
+        },
+        fire(type: string) {
+          for (const fn of handlers.get(type) ?? []) fn()
+        },
+      }
+      created.push(socket)
+      return socket
+    },
+  }
+  return { win, created }
+}
+
+/** The sticky escalation toast the boot hook raises while the ladder fails. */
+function lossAlert(id: string) {
+  return {
+    id,
+    kind: 'warning' as const,
+    title: translateNow('boot.errors.gatewayConnectionLost'),
+    message: 'Hermes lost its connection',
+    createdAt: Date.now() + 1,
+  }
+}
+
 beforeEach(() => {
   resetSocketLifecycleForTests()
   listeners.length = 0
+  $notifications.set([])
 })
 
 afterEach(() => {
   cleanup()
   resetSocketLifecycleForTests()
+  $notifications.set([])
 })
 
 describe('MobileBehaviors owns the suspend flag (HM-32)', () => {
@@ -93,5 +134,40 @@ describe('MobileBehaviors owns the suspend flag (HM-32)', () => {
     expect(isSuspended()).toBe(true)
     again.unmount()
     expect(isSuspended()).toBe(false)
+  })
+})
+
+describe('the connection-lost toast is dismissed only on recovery (HM-32)', () => {
+  it('keeps the alert on resume when the gateway is still down', () => {
+    const view = mount()
+    act(() => appState()({ isActive: false }))
+
+    // The escalation fires while hidden (300 s of suppressed ladder steps) and
+    // the gateway is genuinely dead, so nothing opens on resume.
+    $notifications.set([lossAlert('lost')])
+
+    act(() => appState()({ isActive: true }))
+
+    // Coming back on screen is not evidence of recovery: the toast is the only
+    // actionable thing the user has, and the next escalation is ~300 s away.
+    expect($notifications.get().map((n) => n.id)).toEqual(['lost'])
+    view.unmount()
+  })
+
+  it('dismisses the alert once a socket opens', () => {
+    const { win, created } = lifecycleWindow()
+    installSocketLifecycle(win as never)
+    const view = mount()
+    act(() => appState()({ isActive: false }))
+    $notifications.set([lossAlert('lost')])
+
+    // The post-resume dial succeeds: an open socket is proof, not a proxy.
+    const Socket = win.WebSocket as unknown as new (url: string) => { fire: (t: string) => void }
+    const socket = new Socket('wss://gw.example/ws')
+    expect(created).toHaveLength(1)
+    act(() => socket.fire('open'))
+
+    expect($notifications.get()).toEqual([])
+    view.unmount()
   })
 })

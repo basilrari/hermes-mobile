@@ -24,16 +24,16 @@ export interface AlertLike {
 }
 
 /**
- * Ids of connection-lost alerts created at or after `hiddenSince` (epoch ms).
+ * Ids of connection-lost alerts created at or after `hiddenAtMs` (epoch ms).
  * `connectionLostTitle` is the localized copy the escalation uses, so a
  * translated build matches too.
  */
 export function staleConnectionLostIds(
   alerts: readonly AlertLike[],
   connectionLostTitle: string,
-  hiddenSince: number,
+  hiddenAtMs: number,
 ): string[] {
   return alerts
-    .filter((alert) => alert.createdAt >= hiddenSince && alert.title === connectionLostTitle)
+    .filter((alert) => alert.createdAt >= hiddenAtMs && alert.title === connectionLostTitle)
     .map((alert) => alert.id)
 }

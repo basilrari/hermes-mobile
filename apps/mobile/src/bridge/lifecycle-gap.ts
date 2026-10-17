@@ -29,14 +29,19 @@ let pending: string[] = []
 /**
  * Record that a control could not be installed. Always leaves a console line;
  * also hands the message to the trace when one is listening (now or later).
+ *
+ * The note is scrubbed of any query string / fragment first: the trace keeps
+ * "names only" (rpc-trace.ts), and its badge shares the buffer off the device,
+ * so a caller that quotes a URL must not take `?ticket=` with it.
  */
 export function reportLifecycleGap(message: string): void {
-  console.warn(`[hm-32] ${message}`)
+  const note = scrubGapNote(message)
+  console.warn(`[hm-32] ${note}`)
   if (!reporter) {
-    pending.push(message)
+    pending.push(note)
     return
   }
-  deliver(reporter, message)
+  deliver(reporter, note)
 }
 
 /** Register the sink. Returns an unsubscribe. Flushes anything raised earlier. */
@@ -62,4 +67,9 @@ function deliver(next: Reporter, message: string): void {
   } catch {
     /* a gap note must never break boot */
   }
+}
+
+/** Drop anything from the first `?` or `#` on: the part that carries a ticket. */
+export function scrubGapNote(message: string): string {
+  return message.replace(/[?#][^\s]*/g, '')
 }

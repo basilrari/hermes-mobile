@@ -124,26 +124,23 @@ export function MobileBehaviors() {
     // connection.ts), so the vendored boot hook's 300 s escalation raises a
     // "Hermes lost its connection" toast with `durationMs: 0` — no timer, and
     // nothing on the reconnect path dismisses it. A toast raised while we were
-    // hidden is a false alarm once the connection is back, so drop those on the
-    // resume edge AND when a socket opens (Android delivers `appStateChange` and
-    // `resume` as two listener calls, so a toast can land between them). A real
-    // outage re-escalates ~300 s later: `reconnectNow` clears `escalated` first.
-    let hiddenSince = 0
+    // hidden is stale once the connection is back, so it is dropped when a
+    // socket OPENS, not when the app resumes: coming back on screen does not
+    // prove the gateway is reachable, and a remaining toast is the only
+    // actionable thing ("Reconnect now") a user has while the gateway is still
+    // down. Resume only clears the flag.
+    let hiddenAtMs = 0
     const dismissHiddenToasts = (): void => {
-      if (hiddenSince === 0) return
+      if (hiddenAtMs === 0) return
       const title = translateNow('boot.errors.gatewayConnectionLost')
-      for (const id of staleConnectionLostIds($notifications.get(), title, hiddenSince)) {
+      for (const id of staleConnectionLostIds($notifications.get(), title, hiddenAtMs)) {
         dismissNotification(id)
       }
     }
 
     const removeAppState = onAppStateChange((active) => {
       setSuspended(!active)
-      if (!active) {
-        hiddenSince = Date.now()
-        return
-      }
-      dismissHiddenToasts()
+      if (!active) hiddenAtMs = Date.now()
     })
 
     // A socket that opens is proof the connection is fine, so any connection-lost

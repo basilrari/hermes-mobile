@@ -38,10 +38,14 @@ export function mobileConnectionId(baseUrl: string): string {
 }
 
 /**
- * Thrown by the dial path while the app is backgrounded (HM-32). A distinct type
- * so a caller that is not dialing — `getConnectionFor`, the connect screen's own
- * `getGatewayWsUrl` — can tell "this was suppressed because the app is hidden"
- * from a real transport failure.
+ * Thrown while the app is backgrounded (HM-32). The gate lives in the shared
+ * resolver (`getGatewayWsUrl`), so every caller that resolves a connection sees
+ * it — including the non-dialing ones (`getConnectionFor`, the connect screen).
+ * The type exists so those callers can tell "not while hidden" from a real
+ * transport failure; none of them branch on it today, they fall back to the
+ * descriptor or URL they already hold (`store/profile.ts`, `api/plugins.ts`),
+ * which is the intended behaviour: nothing should resolve a fresh dial target
+ * in the background, and nothing should report it as an outage either.
  */
 export class GatewayDialSuppressed extends Error {
   constructor() {

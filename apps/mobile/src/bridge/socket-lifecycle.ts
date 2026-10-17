@@ -177,12 +177,14 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
           : new (Original as unknown as new (u: string, p: string | string[]) => SocketLike)(url, protocols)
 
       live.add(socket)
+      // Only `close` untracks. `error` can fire on a socket that is still open
+      // (a TLS/connection error on the wire does not always close it), and an
+      // untracked-but-open socket is one the next background cannot close.
       const forget = (): void => {
         live.delete(socket)
       }
       try {
         socket.addEventListener('close', forget)
-        socket.addEventListener('error', forget)
       } catch {
         /* tracking must never break the app */
       }

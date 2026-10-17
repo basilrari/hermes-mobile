@@ -33,6 +33,9 @@ function fakeSocket() {
     addEventListener(type: string, listener: () => void) {
       listeners.set(type, [...(listeners.get(type) ?? []), listener])
     },
+    emit(type: string) {
+      for (const fn of listeners.get(type) ?? []) fn()
+    },
     emitClose() {
       for (const fn of listeners.get('close') ?? []) fn()
     },
@@ -68,6 +71,23 @@ describe('socket lifecycle', () => {
     void b
     expect(created).toHaveLength(2)
     expect(liveSocketCount()).toBe(2)
+  })
+
+  it('stops tracking a socket on close, but not on error (it may still be open)', () => {
+    const { win, created } = freshWindow()
+    installSocketLifecycle(win as never)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+    const socket = new Socket('wss://example/a') as ReturnType<typeof fakeSocket>
+    expect(liveSocketCount()).toBe(1)
+
+    // An `error` frame does not mean the socket closed. Untracking it there
+    // would leave an open socket the next background cannot reach.
+    socket.emit('error')
+    expect(liveSocketCount()).toBe(1)
+
+    socket.emit('close')
+    expect(liveSocketCount()).toBe(0)
+    expect(created).toHaveLength(1)
   })
 
   it('closes every tracked socket when the app is backgrounded', () => {

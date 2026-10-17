@@ -41,4 +41,16 @@ describe('lifecycle gap notes (HM-32)', () => {
     })
     expect(() => reportLifecycleGap('still booting')).not.toThrow()
   })
+
+  it('scrubs a query string or fragment before the note leaves the module', () => {
+    // The trace buffer is "names only" and its badge can share it off-device, so
+    // a note that quotes a URL must not carry `?ticket=`.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const seen: string[] = []
+    onLifecycleGap((m) => seen.push(m))
+    reportLifecycleGap('dial failed for wss://gw:9119/api/ws?ticket=TICKET-abc123#frag')
+    expect(seen).toEqual(['dial failed for wss://gw:9119/api/ws'])
+    expect(String(warn.mock.calls[0][0])).not.toMatch(/TICKET/)
+    warn.mockRestore()
+  })
 })
