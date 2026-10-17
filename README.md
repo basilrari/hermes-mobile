@@ -45,6 +45,7 @@ Requirements: Node 22+, JDK 21, and the Android SDK (platform 36 and build-tools
 ```bash
 npm ci --ignore-scripts        # lockfile is upstream's, so the renderer gets the exact dep versions it was tested with; skips Electron/node-pty native builds the mobile app doesn't need
 npx patch-package              # applies patches/ (normally run by postinstall)
+node scripts/apply-upstream-patches.mjs   # applies patches/upstream (the other half of postinstall)
 cd apps/mobile
 npm run build                  # vite → apps/mobile/dist
 npx cap sync android           # Capacitor CLI needs Node 22+

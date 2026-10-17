@@ -1,6 +1,6 @@
 # Handoff: hermes-mobile
 
-This page is for an agent taking over the project. It covers the goal, the decisions already made, the rules, how to build and test, what is merged, what is open, and what to do next. State was last updated from GitHub on 2026-10-16 (Taipei), after #51 merged. **Everything in this file was re-checked against `main` on that date** — if a section disagrees with the repo, the repo wins and this file is the bug (`HM-29`).
+This page is for an agent taking over the project. It covers the goal, the decisions already made, the rules, how to build and test, what is merged, what is open, and what to do next. State was last updated from GitHub on 2026-10-17 (Taipei), after #51 merged. **Everything in this file was re-checked against `main` on that date** — if a section disagrees with the repo, the repo wins and this file is the bug (`HM-29`).
 
 ## 1. Goal and scope
 
@@ -91,6 +91,7 @@ Requirements: Node 22 or later, JDK 21, Android SDK platform 36 with build-tools
 ```bash
 npm ci --ignore-scripts   # use upstream's lockfile; skip Electron native builds
 npx patch-package         # apply patches/
+node scripts/apply-upstream-patches.mjs   # the other half of postinstall; patches/upstream
 ```
 
 ### Unit tests and typecheck

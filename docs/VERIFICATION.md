@@ -12,12 +12,12 @@ Branch `main`, renderer pinned to `NousResearch/hermes-agent` `450ad5055e`
 
 | Check | Command | Result |
 |---|---|---|
-| Bridge unit tests | `cd apps/mobile && npm test` | **106 passed** (9 files) |
+| Bridge unit tests | `cd apps/mobile && npm test` | **107 passed** (9 files) |
 | Types | `cd apps/mobile && npm run typecheck` | 0 errors |
 | End-to-end harness | `npm run e2e` | **59 checks** at 412×915, 915×412, 800×1280, 1280×800 |
 | Gateway doctor | `cd scripts/gateway-doctor && python3 -m unittest test_doctor.py` | 31 tests |
 | Secret scan | `gitleaks detect --source . --config .gitleaks.toml` | no leaks (full history) |
-| Carried patches | `node scripts/apply-upstream-patches.mjs --check --self-test` | clean (no patches carried) |
+| Carried patches | `node scripts/apply-upstream-patches.mjs --check` then `node scripts/apply-upstream-patches.mjs --self-test` | no carried patches (nothing to do); self-test: PASS |
 | Android debug APK | `npm run apk:debug` | builds (see the gap below) |
 
 What the harness actually asserts per viewport: the connect screen renders; an

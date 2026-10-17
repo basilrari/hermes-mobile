@@ -18,7 +18,7 @@
  * Target: by default a local mock gateway (no secret, CI-safe). Point it at the
  * real box with:
  *     HERMES_E2E_GATEWAY_URL=https://pavillion-claw.tailfc1337.ts.net \
- *     HERMES_E2E_PASSWORD=… npm run e2e
+ *     HERMES_E2E_TOKEN=… npm run e2e
  * (Password login is native-only — a browser cannot read Set-Cookie — so the
  * real-gateway run exercises it only from the app on the tablet.)
  *
