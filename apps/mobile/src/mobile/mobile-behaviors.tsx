@@ -106,9 +106,9 @@ export function MobileBehaviors() {
       })
       .catch(() => {})
 
-    // HM-32: drop the gateway socket when the app goes to the background, and let
-    // it dial again on the way back. Android keeps a hidden WebView's sockets
-    // open, which holds the radio and the process warm with nothing on screen.
+    // HM-32: close tracked sockets when the app leaves the screen, and close any
+    // the renderer opens while it is still hidden. Resume only clears the flag.
+    // The ticket request before that constructor is still the rest of HM-32.
     const removeAppState = onAppStateChange((active) => {
       setSuspended(!active)
     })

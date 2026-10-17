@@ -5,10 +5,12 @@ import {
   isSuspended,
   liveSocketCount,
   onSocketCreated,
+  resetSocketLifecycleForTests,
   setSuspended,
 } from './socket-lifecycle'
 
-/** A stand-in for a real WebSocket: records close calls, fires listeners. */
+/** A stand-in for a real WebSocket: records close calls, fires listeners.
+ *  Rejects a code Chromium would reject, so a suite cannot go green on 1001. */
 function fakeSocket() {
   const listeners = new Map<string, Array<() => void>>()
   const closed: Array<{ code?: number; reason?: string }> = []
@@ -16,6 +18,13 @@ function fakeSocket() {
     readyState: 1,
     closed,
     close(code?: number, reason?: string) {
+      if (code !== undefined && code !== 1000 && (code < 3000 || code > 4999)) {
+        const err = new Error(
+          `Failed to execute 'close' on 'WebSocket': The close code must be either 1000, or between 3000 and 4999. ${code} is neither.`,
+        )
+        err.name = 'InvalidAccessError'
+        throw err
+      }
       closed.push({ code, reason })
       this.readyState = 3
       for (const fn of listeners.get('close') ?? []) fn()
@@ -44,10 +53,9 @@ function freshWindow(sockets: ReturnType<typeof fakeSocket>[]) {
   return { win, created }
 }
 
-// Every test starts from a known suspension state.
+// Module globals (suspended, live, observers) are shared. The install flag is not.
 beforeEach(() => {
-  setSuspended(false)
-  closeAllSockets()
+  resetSocketLifecycleForTests()
 })
 
 describe('socket lifecycle', () => {
@@ -76,9 +84,76 @@ describe('socket lifecycle', () => {
     expect(liveSocketCount()).toBe(0)
     for (const socket of created) {
       expect(socket.closed).toHaveLength(1)
-      expect(socket.closed[0]).toEqual({ code: 1001, reason: 'app backgrounded' })
+      expect(socket.closed[0]).toEqual({ code: 1000, reason: 'app backgrounded' })
       expect(socket.readyState).toBe(3)
     }
+  })
+
+  it('keeps a socket tracked when close rejects the code, and the next suspend finishes it', () => {
+    const { win, created } = freshWindow([])
+    installSocketLifecycle(win as never)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+    new Socket('wss://example/a')
+
+    let thrown: unknown
+    try {
+      created[0].close(1001, 'app backgrounded')
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).name).toBe('InvalidAccessError')
+    expect(created[0].readyState).toBe(1)
+
+    expect(closeAllSockets(1001, 'app backgrounded')).toBe(0)
+    expect(liveSocketCount()).toBe(1)
+    expect(isSuspended()).toBe(false)
+
+    setSuspended(true)
+    expect(created[0].readyState).toBe(3)
+    expect(created[0].closed).toEqual([{ code: 1000, reason: 'app backgrounded' }])
+    expect(liveSocketCount()).toBe(0)
+  })
+
+  it('retries a close that threw, on a later suspend of an already-suspended app', () => {
+    const { win, created } = freshWindow([])
+    installSocketLifecycle(win as never)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+    const socket = new Socket('wss://example/a') as ReturnType<typeof fakeSocket>
+    const realClose = socket.close.bind(socket)
+    let failed = false
+    socket.close = (code?: number, reason?: string) => {
+      if (!failed) {
+        failed = true
+        const err = new Error('close failed')
+        err.name = 'InvalidAccessError'
+        throw err
+      }
+      realClose(code, reason)
+    }
+
+    setSuspended(true)
+    expect(liveSocketCount()).toBe(1)
+    expect(socket.readyState).toBe(1)
+
+    setSuspended(true)
+    expect(socket.readyState).toBe(3)
+    expect(liveSocketCount()).toBe(0)
+    expect(created).toHaveLength(1)
+  })
+
+  it('closes a socket the renderer opens while already suspended, and does not keep it', () => {
+    const { win, created } = freshWindow([])
+    installSocketLifecycle(win as never)
+    setSuspended(true)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+    new Socket('wss://example/again')
+
+    expect(created).toHaveLength(1)
+    expect(created[0].readyState).toBe(3)
+    expect(created[0].closed).toEqual([{ code: 1000, reason: 'app backgrounded' }])
+    expect(liveSocketCount()).toBe(0)
+    expect(isSuspended()).toBe(true)
   })
 
   it('does not close a resumed app\'s sockets and is idempotent on resume', () => {
@@ -116,6 +191,17 @@ describe('socket lifecycle', () => {
     new Socket('wss://example/a')
     expect(bad).toHaveBeenCalledTimes(1)
     expect(seen).toHaveLength(1)
+  })
+
+  it('does not keep an observer registered by a previous test', () => {
+    const seen: unknown[] = []
+    onSocketCreated(() => seen.push(1))
+    resetSocketLifecycleForTests()
+    const { win } = freshWindow([])
+    installSocketLifecycle(win as never)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+    new Socket('wss://example/a')
+    expect(seen).toHaveLength(0)
   })
 
   it('wraps exactly once, even if install runs again', () => {

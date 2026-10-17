@@ -99,8 +99,10 @@ export function onPowerResume(callback: () => void): () => void {
  * `active` is true when the app is on screen. Returns an unsubscribe.
  */
 export function onAppStateChange(callback: (active: boolean) => void): () => void {
-  const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive))
+  // Same catch as the keyboard listeners: a missing plugin rejects, and an
+  // unhandled rejection must not take down the effect that owns the socket.
+  const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive)).catch(() => null)
   return () => {
-    void handle.then((h) => h.remove())
+    void handle.then((h) => h?.remove())
   }
 }
