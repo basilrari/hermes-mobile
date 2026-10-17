@@ -236,3 +236,28 @@ body {
     white-space: nowrap;
   }
 }
+
+/*
+ * HM-35 (#55): renderer controls measured below the 24 CSS px touch floor.
+ *
+ * The layout harness found the same four at every viewport: the profile-rail
+ * buttons "New profile" and "Import profile…" at 20x20 (Tailwind `size-5`), and
+ * the sidebar section rows "Pinned" (90x12) and "Sessions" (102x12) — a 12px-tall
+ * row is aimed at a fingertip, and Android's own guidance is 24dp minimum.
+ *
+ * Anchored on the renderer's own hooks (`data-slot="profile-rail"` and the
+ * `group/section-label` class the row is built from) instead of a measured
+ * Tailwind shape, so an upstream rename fails the harness loudly rather than
+ * silently re-shrinking the targets.
+ */
+[data-slot='profile-rail'] button {
+  min-width: 24px !important;
+  min-height: 24px !important;
+}
+
+/* The section header button *is* the row's hit area; grow the box, keep the
+   label centred on its own line. */
+button.group\/section-label {
+  min-height: 24px !important;
+  align-items: center !important;
+}

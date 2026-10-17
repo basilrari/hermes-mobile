@@ -202,18 +202,6 @@ const MIN_TOUCH_PX = 24
 const POLISH_TOUCH_PX = 32
 const MAX_TOUCH_REPORT = 5
 
-/**
- * Controls below the touch floor that are KNOWN and owned upstream (issue #55:
- * the profile switcher's 20x20 icon buttons and the 12px-tall sidebar section
- * rows). Pinned by label so a NEW offender turns this check red while the known
- * renderer chrome stays visible as debt. When #55 lands, this list should empty.
- */
-const KNOWN_UNDER_FLOOR = [
-  'button[Pinned]',
-  'button[Sessions]',
-  'button[New profile]',
-  'button[Import profile',
-]
 
 async function layoutFindings(page) {
   return page.evaluate(({ minTouch, polishTouch }) => {
@@ -414,18 +402,17 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     check(`${profile.name}: composer visible inside the viewport`, layout.composerOk, layout.composerNote)
     // Asserts on EVERY run (round-2 finding: the old version passed the literal
     // `true` in an else-branch, so it could only run when nothing was wrong and
-    // reported success unconditionally). Known renderer chrome under the floor is
-    // pinned in KNOWN_UNDER_FLOOR (issue #55) so THIS check cannot go quiet: any
-    // offender that is not the known debt fails it.
-    const unexpected = layout.touchOffenders.filter((o) => !KNOWN_UNDER_FLOOR.some((known) => o.startsWith(known)))
+    // reported success unconditionally). The debt this used to pin — the profile
+    // rail's 20x20 buttons and the 12px sidebar section rows (#55) — is fixed, so
+    // the check is absolute again: ANY visible control under the floor fails it.
     const sample = (list) => {
       const head = list.slice(0, MAX_TOUCH_REPORT).join(' | ')
       return list.length > MAX_TOUCH_REPORT ? `${head} (+${list.length - MAX_TOUCH_REPORT} more)` : head
     }
     const touchDetail = layout.touchTotal === 0
       ? 'all visible controls >= floor'
-      : `${layout.touchTotal} under the ${MIN_TOUCH_PX}px floor${unexpected.length ? ` — NEW: ${sample(unexpected)}` : ` — all known debt (#55): ${sample(layout.touchOffenders)}`}`
-    check(`${profile.name}: no NEW control under the ${MIN_TOUCH_PX}px touch floor`, unexpected.length === 0, touchDetail)
+      : `${layout.touchTotal} under the ${MIN_TOUCH_PX}px floor — ${sample(layout.touchOffenders)}`
+    check(`${profile.name}: every visible control meets the ${MIN_TOUCH_PX}px touch floor`, layout.touchTotal === 0, touchDetail)
     if (layout.polishTargets > 0) {
       note(`${profile.name}: ${layout.polishTargets} control(s) under ${POLISH_TOUCH_PX}px — polish list, not breakage`)
     }

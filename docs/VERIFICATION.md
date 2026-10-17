@@ -24,7 +24,7 @@ What the harness actually asserts per viewport: the connect screen renders; an
 `http://` gateway is refused; token login reaches the chat shell; the **Bots
 roster** surface is reachable (docked at ≥640 px, or via the titlebar's *Show
 sidebar* on a phone); no horizontal overflow; the composer is inside the
-viewport; no new control is under the 24px touch floor; the RPC trace is live
+viewport; every visible control meets the 24px touch floor (no debt pinned); the RPC trace is live
 and shows **zero `bot_relay.*`** calls; `preparedSubmissions` is exposed and the
 renderer's own `localStorage` fallback is empty; `deviceIdentity()` returns a v4
 uuid and a non-empty label; **no conversation state is in `localStorage`,
