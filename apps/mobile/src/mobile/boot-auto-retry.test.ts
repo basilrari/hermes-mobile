@@ -161,6 +161,32 @@ describe('BootAutoRetry (HM-32)', () => {
     expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('1')
   })
 
+  it('re-arms on a second, differently worded failure so the cover still comes down (round 25 W1)', async () => {
+    // The armed window's cleanup runs when `boot.error` changes to another message.
+    // It cancels the 1.1 s timer and the visibility waiter, so if the latch stayed
+    // set nothing was left to reload *or* to fire the 60 s bound — the z-1500 cover
+    // sat over an app whose manual surface was masked underneath.
+    const boot = await failBoot()
+    render(createElement(BootAutoRetry))
+
+    await act(async () => {
+      vi.advanceTimersByTime(1100)
+    })
+    expect(coverText()).toBe('Reconnecting…')
+
+    // A different `failDesktopBoot` message inside the same mounted component —
+    // `syncPrimaryReauthError` passes 'Sign in again', the boot switch a boot error.
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: 'Sign in again', running: false })
+    })
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('2')
+
+    await act(async () => {
+      vi.advanceTimersByTime(HIDDEN_RELOAD_TIMEOUT_MS + 5_000)
+    })
+    expect(coverText()).toBeNull()
+  })
+
   it('keeps the budget a reload landed with until the boot completes (round 22 W4)', async () => {
     const boot = await import('@/store/boot')
     window.sessionStorage.setItem('hermes-boot-retries', '1')

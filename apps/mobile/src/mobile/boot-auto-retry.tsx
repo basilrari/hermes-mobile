@@ -93,6 +93,15 @@ export function BootAutoRetry() {
         window.clearTimeout(timer)
         cancelReload.current?.()
         cancelReload.current = null
+        // The armed window ended, and not necessarily on a connection edge: a
+        // second failure with a *different* message re-runs this effect (deps are
+        // `running`/`error`), the cleanup above cancels the waiter, and the body
+        // then skips arming while the latch is still set — no reload, no 60 s
+        // `onTimeout` to drop the cover, and `retrying` still true. Clearing it
+        // here lets that re-run arm again; `RETRY_KEY` still bounds the total —
+        // only the connection edge refunds it — so the retry that follows writes
+        // `2` and gives up after it (round 25 W1).
+        scheduled.current = false
       }
     }
   }, [boot.running, boot.error])

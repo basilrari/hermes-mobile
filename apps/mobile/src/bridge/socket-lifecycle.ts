@@ -49,14 +49,12 @@ import { reportLifecycleGap, resetLifecycleGapForTests } from './lifecycle-gap'
 
 /** The subset of WebSocket this module relies on. */
 export interface SocketLike {
-  /** The URL the socket was constructed with. Optional on purpose: observers
-   *  (`mobile-behaviors.tsx`'s open watch) read it to tell the gateway socket
-   *  from its siblings, but the close rule does NOT — it keys on the URL the
-   *  wrapper was handed, because an absent property here is indistinguishable
-   *  from "this is a sibling" and would skip the close in silence (round 23). */
-  url?: string
   close(code?: number, reason?: string): void
   addEventListener(type: string, listener: () => void): void
+  // No `url` member: nothing here reads it. The URL the wrapper constructed the
+  // socket with is what the gateway/sibling rule uses, captured at construction
+  // and handed to observers — so a socket implementation that does not expose
+  // `.url` cannot silently opt out of the close (rounds 23-25).
 }
 
 /** The subset of the window this module touches, so tests can pass a fake. */
@@ -117,9 +115,12 @@ export function isSocketLifecycleInstalled(win: object = globalThis): boolean {
 /**
  * Watch every socket the renderer opens. Returns an unsubscribe.
  *
- * The observer is handed the URL this wrapper constructed the socket with, not
- * `socket.url`: the field is optional, so an observer that read it would miss a
- * socket on exactly the shape the close rule now handles (round 24 S1).
+ * The observer is handed the URL the wrapper constructed the socket with —
+ * `socket.url` is not read (the interface does not declare it), so an observer
+ * cannot miss a socket on the shape the close rule handles. This string is the
+ * URL as built: it may carry `?ticket=` (single-use) or `?token=` (a long-lived
+ * session token), so branch on it and never log it, name it in an error, or pass
+ * it to `lifecycle-gap`/`rpc-trace` (round 24 S1, round 25 S2).
  */
 export function onSocketCreated(observer: Observer): () => void {
   observers.add(observer)

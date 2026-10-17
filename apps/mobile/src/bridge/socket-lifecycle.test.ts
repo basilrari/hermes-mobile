@@ -238,12 +238,12 @@ describe('socket lifecycle', () => {
     expect(liveSocketCount()).toBe(0)
   })
 
-  it('hands observers the URL the wrapper captured, not the optional `socket.url`', () => {
+  it('hands observers the URL the wrapper captured, for a socket that has none of its own', () => {
     // One source of truth: the toast watch in `mobile-behaviors.tsx` scopes itself
-    // by this value, so it must not depend on a field the close rule no longer
-    // reads (round 24 S1).
-    const seen: Array<{ url?: string; captured?: string }> = []
-    onSocketCreated((socket, url) => seen.push({ captured: url, url: socket.url }))
+    // by this value, so it must not depend on a field the module no longer reads
+    // (round 24 S1, round 25 S1).
+    const seen: string[] = []
+    onSocketCreated((_socket, url) => seen.push(url))
     const win = {
       WebSocket: function (this: unknown, _url: string) {
         return { readyState: 1, close() {}, addEventListener() {} }
@@ -254,7 +254,7 @@ describe('socket lifecycle', () => {
 
     new Socket('wss://gw.example/api/ws?ticket=t')
 
-    expect(seen).toEqual([{ captured: 'wss://gw.example/api/ws?ticket=t', url: undefined }])
+    expect(seen).toEqual(['wss://gw.example/api/ws?ticket=t'])
   })
 
   it('leaves a sibling stream alone: only the gateway socket has a resume redial', () => {
