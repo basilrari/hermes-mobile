@@ -124,10 +124,15 @@ export function onAppStateChange(callback: (active: boolean) => void): () => voi
       // Sized to survive the trace's clamp: `rpc-trace` prepends `lifecycle: ` (11
       // chars) and truncates past 120, and the truncation eats the TAIL — which is
       // the reason code, the one field that says which way the control failed
-      // (round 18). The fixed part is 74 chars, so 74 + 11 + 24 = 109: even a
-      // maximal reason leaves headroom, and the charset keeps it a code-shaped
-      // token rather than free text.
-      const bounded = reason.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 24) || 'unknown'
+      // (round 18). Fixed part 74 chars, so 74 + 11 + 24 = 109 for the longest
+      // possible reason.
+      //
+      // VALIDATED, not repaired (round 19): stripping the disallowed characters
+      // joined free text (`'bad hunter2'` → `badhunter2`) and a repaired-then-sliced
+      // 40-char token dropped below `scrubGapNote`'s 32-char redaction rule, where it
+      // used to be redacted whole. Either the reason is already a code-shaped token
+      // of bounded length, or it is `unknown`.
+      const bounded = /^[A-Za-z0-9_.-]{1,24}$/.test(reason) ? reason : 'unknown'
       reportLifecycleGap(
         `appStateChange did not register: no background close, no reload wake-up (${bounded})`,
       )

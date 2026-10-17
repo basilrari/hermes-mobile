@@ -64,10 +64,51 @@ describe('onAppStateChange (HM-32)', () => {
     const stop = onAppStateChange(() => {})
     await vi.waitFor(() => expect(seen).toHaveLength(1))
 
-    expect(seen[0]).toContain('A'.repeat(24))
-    expect(seen[0]).not.toContain('A'.repeat(25))
+    // Over-long is not repaired into a 24-char prefix any more: validate-or-unknown
+    // (round 19), so nothing of the 60-char run is stored.
+    expect(seen[0]).toContain('(unknown)')
+    expect(seen[0]).not.toContain('AAAA')
     expect(seen[0]).not.toContain('hunter2')
     expect(`lifecycle: ${seen[0]}`.length).toBeLessThanOrEqual(120)
+    stop()
+    warn.mockRestore()
+  })
+
+  it('rejects a free-form reason instead of joining its words', async () => {
+    // Stripping the disallowed characters repaired `'bad hunter2'` into
+    // `badhunter2`, which is free text in the shared trace buffer with the spaces
+    // removed (round 19). The rule is validate-or-`unknown`.
+    const seen: string[] = []
+    resetLifecycleGapForTests()
+    onLifecycleGap((note) => seen.push(note))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    addListener.mockRejectedValueOnce({ code: 'bad hunter2' })
+
+    const stop = onAppStateChange(() => {})
+    await vi.waitFor(() => expect(seen).toHaveLength(1))
+
+    expect(seen[0]).toContain('(unknown)')
+    expect(seen[0]).not.toContain('badhunter2')
+    expect(seen[0]).not.toContain('hunter2')
+    stop()
+    warn.mockRestore()
+  })
+
+  it('does not slice a long token below the scrub rule, where it would stop being redacted', async () => {
+    // `scrubGapNote` redacts runs of 32+ credential-shaped characters. Slicing a
+    // long `code` to 24 put it under that threshold, so a credential used to be
+    // redacted whole and was then stored in part (round 19).
+    const seen: string[] = []
+    resetLifecycleGapForTests()
+    onLifecycleGap((note) => seen.push(note))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    addListener.mockRejectedValueOnce({ code: `ghp_${'a'.repeat(36)}` })
+
+    const stop = onAppStateChange(() => {})
+    await vi.waitFor(() => expect(seen).toHaveLength(1))
+
+    expect(seen[0]).toContain('(unknown)')
+    expect(seen[0]).not.toContain('ghp_')
     stop()
     warn.mockRestore()
   })

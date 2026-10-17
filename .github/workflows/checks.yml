@@ -93,19 +93,36 @@ jobs:
         run: npm run build:mobile
       - name: Sync the Android config and run the guard
         run: npm run sync:android
-      - name: sync:android still runs the guard
-        # Running `npm run sync:android` cannot notice its own wiring being removed:
-        # delete the `&& node .../check-capacitor-config.mjs` from the script and the
-        # command still exits 0 on a clean config. Assert the string.
+      - name: every producer still runs the guard, unchained from a swallow
+        # Running the producer cannot notice its own wiring being removed: delete the
+        # guard from the script, or append `|| true`, and the command still exits 0 on
+        # a clean config. So assert the SHAPE — the guard is a `&&`-joined command that
+        # comes straight after `cap sync` and is not followed by anything that could
+        # swallow its status (round 19).
         run: |
           node -e '
-            const s = require("./package.json").scripts["sync:android"]
-            if (!s.includes("check-capacitor-config.mjs")) {
-              console.error("sync:android no longer runs scripts/check-capacitor-config.mjs: " + s)
-              process.exit(1)
+            const fs = require("fs")
+            const producers = [
+              ["package.json", "sync:android"],
+              ["apps/mobile/package.json", "cap:sync"],
+              ["apps/mobile/package.json", "cap:android"],
+            ]
+            const ALLOWED_AFTER = ["cap open android"]
+            const fail = (msg) => { console.error(msg); process.exitCode = 1 }
+            for (const [file, key] of producers) {
+              const script = JSON.parse(fs.readFileSync(file, "utf8")).scripts?.[key]
+              if (!script) { fail(`${file} has no ${key} script`); continue }
+              const links = script.split("&&").map((part) => part.trim())
+              const at = links.findIndex((part) => /^node\s+\S*scripts\/check-capacitor-config\.mjs$/.test(part))
+              if (at === -1) { fail(`${key} does not run the guard as a plain && command: ${script}`); continue }
+              if (!links.slice(0, at).some((part) => part.includes("cap sync"))) {
+                fail(`${key} runs the guard before cap sync: ${script}`)
+              }
+              const after = links.slice(at + 1)
+              const unexpected = after.filter((part) => !ALLOWED_AFTER.includes(part))
+              if (unexpected.length) fail(`${key} runs more after the guard (${unexpected.join(", ")}): ${script}`)
             }
           '
-
   upstream-patches:
     name: carried upstream patches
     runs-on: ubuntu-latest

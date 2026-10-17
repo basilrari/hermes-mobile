@@ -64,9 +64,11 @@ export interface ReloadOptions {
  *
  * Sized above the boot's own retry budget rather than picked round: `canRetry`
  * allows 5 attempts with full jitter and ceilings 2/4/8/15/15 s
- * (`use-gateway-boot.ts`, `reconnect-backoff.ts`) — ~22 s typical, 44 s worst case.
- * Below ~45 s the cover would drop over a boot that is still legitimately retrying,
- * i.e. the failure screen in front of a boot that has not failed (round 18).
+ * (`apps/desktop/src/app/gateway/hooks/use-gateway-boot.ts` — `canRetry`,
+ * `BOOT_RETRY_BASE_DELAY_MS`; `apps/shared/src/reconnect-backoff.ts` — `capMs`) —
+ * ~22 s typical, 44 s worst case. Below ~45 s the cover would drop over a boot that
+ * is still legitimately retrying, i.e. the failure screen in front of a boot that
+ * has not failed (round 18).
  */
 export const HIDDEN_RELOAD_TIMEOUT_MS = 60_000
 
