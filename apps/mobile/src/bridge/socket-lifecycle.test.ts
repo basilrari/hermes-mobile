@@ -207,6 +207,56 @@ describe('socket lifecycle', () => {
     expect(liveSocketCount()).toBe(0)
   })
 
+  it('closes a url-less gateway socket constructed while already suspended (the constructor read)', () => {
+    // The sibling of the case above, and a separate read: `closeGatewaySockets`
+    // consults the registry, the constructor consults the URL it was handed. Only
+    // this case fails when the constructor falls back to `socket.url` (round 24
+    // W1 — the earlier test built its socket while visible, so it never entered
+    // that branch).
+    const closed: Array<{ code?: number; reason?: string }> = []
+    const win = {
+      WebSocket: function (this: unknown, _url: string) {
+        return {
+          readyState: 1,
+          close(code?: number, reason?: string) {
+            closed.push({ code, reason })
+            this.readyState = 3
+          },
+          addEventListener() {
+            /* no listeners needed for this case */
+          },
+        }
+      },
+    }
+    installSocketLifecycle(win as never)
+    setSuspended(true)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+
+    new Socket('wss://gw.example/api/ws?ticket=t')
+
+    expect(closed).toEqual([{ code: 1000, reason: 'app backgrounded' }])
+    expect(liveSocketCount()).toBe(0)
+  })
+
+  it('hands observers the URL the wrapper captured, not the optional `socket.url`', () => {
+    // One source of truth: the toast watch in `mobile-behaviors.tsx` scopes itself
+    // by this value, so it must not depend on a field the close rule no longer
+    // reads (round 24 S1).
+    const seen: Array<{ url?: string; captured?: string }> = []
+    onSocketCreated((socket, url) => seen.push({ captured: url, url: socket.url }))
+    const win = {
+      WebSocket: function (this: unknown, _url: string) {
+        return { readyState: 1, close() {}, addEventListener() {} }
+      },
+    }
+    installSocketLifecycle(win as never)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+
+    new Socket('wss://gw.example/api/ws?ticket=t')
+
+    expect(seen).toEqual([{ captured: 'wss://gw.example/api/ws?ticket=t', url: undefined }])
+  })
+
   it('leaves a sibling stream alone: only the gateway socket has a resume redial', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)

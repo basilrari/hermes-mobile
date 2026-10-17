@@ -163,9 +163,13 @@ export function MobileBehaviors() {
     // their `open` is not evidence about the gateway (`isGatewayWsUrl`) — and only
     // the window the app was hidden for, so a toast raised on a visible app is left
     // alone. The observer sees every socket the wrapper builds, hence the check.
-    const removeOpenWatch = onSocketCreated((socket) => {
+    const removeOpenWatch = onSocketCreated((socket, url) => {
       socket.addEventListener('open', () => {
-        if (isGatewayWsUrl(socket.url)) dismissHiddenToasts()
+        // `url` is the one the wrapper constructed the socket with — the same
+        // value the close rule uses. `socket.url` is optional, and reading it here
+        // would leave the dismissal blind to exactly the shape the close handles
+        // (round 24 S1).
+        if (isGatewayWsUrl(url)) dismissHiddenToasts()
       })
     })
 

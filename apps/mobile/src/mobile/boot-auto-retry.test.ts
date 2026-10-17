@@ -136,6 +136,31 @@ describe('BootAutoRetry (HM-32)', () => {
     expect(window.sessionStorage.getItem('hermes-boot-retries')).toBeNull()
   })
 
+  it('arms a second retry after a recovery (the latch is cleared with the budget)', async () => {
+    // Round 24 W1: `removeItem(RETRY_KEY)` refunded the budget, but
+    // `scheduled.current` stayed true, so the next failure in this mounted
+    // component skipped the cover and the silent retry it guards.
+    const boot = await failBoot()
+    render(createElement(BootAutoRetry))
+
+    await act(async () => {
+      vi.advanceTimersByTime(1100)
+    })
+    expect(coverText()).toBe('Reconnecting…')
+
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: null, running: false })
+    })
+    expect(coverText()).toBeNull()
+
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: 'gateway did not answer', running: false })
+      vi.advanceTimersByTime(1100)
+    })
+    expect(coverText()).toBe('Reconnecting…')
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('1')
+  })
+
   it('keeps the budget a reload landed with until the boot completes (round 22 W4)', async () => {
     const boot = await import('@/store/boot')
     window.sessionStorage.setItem('hermes-boot-retries', '1')

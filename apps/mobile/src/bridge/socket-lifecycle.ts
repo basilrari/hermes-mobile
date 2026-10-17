@@ -65,7 +65,7 @@ export interface LifecycleWindow {
   __hermesSocketLifecycleInstalled?: boolean
 }
 
-type Observer = (socket: SocketLike) => void
+type Observer = (socket: SocketLike, url: string) => void
 
 /**
  * Socket → the URL the wrapper was given when it constructed it. The URL is
@@ -114,7 +114,13 @@ export function isSocketLifecycleInstalled(win: object = globalThis): boolean {
   return (win as { __hermesSocketLifecycleInstalled?: boolean }).__hermesSocketLifecycleInstalled === true
 }
 
-/** Watch every socket the renderer opens. Returns an unsubscribe. */
+/**
+ * Watch every socket the renderer opens. Returns an unsubscribe.
+ *
+ * The observer is handed the URL this wrapper constructed the socket with, not
+ * `socket.url`: the field is optional, so an observer that read it would miss a
+ * socket on exactly the shape the close rule now handles (round 24 S1).
+ */
 export function onSocketCreated(observer: Observer): () => void {
   observers.add(observer)
   return () => {
@@ -189,7 +195,7 @@ function closeTracked(socket: SocketLike, code = CLOSE_CODE, reason = CLOSE_REAS
 
 /**
  * Close every tracked GATEWAY socket. Returns how many `close` calls returned.
- * A call that throws does not count, and that socket stays in the set.
+ * A call that throws does not count, and that socket stays in the registry.
  *
  * Siblings (`/api/plugins/…`, dictation, Bot Screen RFB) are held to their own
  * lifecycles: only the gateway socket has a redial on resume (`reconnectNow`),
@@ -264,7 +270,7 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
 
       for (const observer of [...observers]) {
         try {
-          observer(socket)
+          observer(socket, url)
         } catch {
           /* one bad observer must not stop the others */
         }

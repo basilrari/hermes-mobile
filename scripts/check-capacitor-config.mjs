@@ -96,8 +96,10 @@ if (effective === undefined) {
 // `getDeepestObject` throws — `JSONUtils.java:174-186` — which is a missing OR
 // non-object `android` (`o.getJSONObject(k)` at :181), not only a missing key.
 // A `getString` that throws on a non-string is the `org.json:json` artifact
-// Capacitor declares `testImplementation` only, not the `org.json` the APK runs
-// (round 22 W1).
+// Capacitor declares `testImplementation` only (`capacitor/build.gradle:91`), not
+// the `org.json` the APK runs (round 22 W1) — which is why the two shapes take
+// different paths: a non-string is coerced by the platform's `getString`, a
+// non-object `android` throws in `getDeepestObject` before `getString` is reached.
 // Coercing here would certify it (round 16).
 if (typeof effective !== 'string' || effective.toLowerCase() !== SAFE_BEHAVIOR) {
   console.error(

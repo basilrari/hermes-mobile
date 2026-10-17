@@ -49,8 +49,12 @@ export function BootAutoRetry() {
       // The cover comes down here too: this is the branch that knows the connection
       // landed, and `syncPrimaryReauthError` reaches it without passing through
       // `running: true`, so the S3 branch below is not the only exit (round 23 W2).
+      // `scheduled` is cleared with it: the budget this branch refunds cannot be
+      // spent while the latch that guards arming is still set, so a later failure in
+      // the same mounted component would skip the silent retry entirely (round 24 W1).
       window.sessionStorage.removeItem(RETRY_KEY)
       setRetrying(false)
+      scheduled.current = false
     }
 
     if (boot.running && !boot.error) {
