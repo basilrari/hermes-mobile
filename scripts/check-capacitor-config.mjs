@@ -85,10 +85,12 @@ if (effective === undefined) {
 }
 
 // `CapConfig.java:295` lowercases before its switch, so 'NONE' is the same off
-// value — but only a STRING can be that value. `JSONObject.getString` stringifies a
-// non-string member, so `["none"]` reaches the switch as `[\"none\"]`, misses the
-// 'none' case and lands on `default: loggingEnabled = isDebug` (on in a debug APK).
-// Coercing here would certify it (round 16).
+// value — but only a STRING can be that value. `JSONUtils.getString` calls
+// `JSONObject.getString`, which THROWS on a non-string member; the catch returns the
+// default it was handed. For the top-level key that default is
+// `LOG_BEHAVIOR_DEBUG` → `isDebug` → logging ON in a debuggable APK, so a non-string
+// value is exactly the shape that turns logging on while reading like "not
+// production" (rounds 16, 20). Coercing it here would certify that.
 if (typeof effective !== 'string' || effective.toLowerCase() !== SAFE_BEHAVIOR) {
   console.error(
     `capacitor config check: the synced config resolves ${effectiveKey}=${JSON.stringify(effective)}.\n` +
