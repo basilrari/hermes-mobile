@@ -51,6 +51,11 @@ import { reportLifecycleGap, resetLifecycleGapForTests } from './lifecycle-gap'
 export interface SocketLike {
   close(code?: number, reason?: string): void
   addEventListener(type: string, listener: () => void): void
+  // Required, like `addEventListener`: an observer that watches a socket can
+  // outlive the component that installed it (the 401 path unmounts
+  // `MobileBehaviors` while hidden, and a socket it saw can still be open), so
+  // the observer needs to be able to detach from the socket it was handed.
+  removeEventListener(type: string, listener: () => void): void
   // No `url` member: nothing here reads it. The URL the wrapper constructed the
   // socket with is what the gateway/sibling rule uses, captured at construction
   // and handed to observers — so a socket implementation that does not expose
@@ -67,9 +72,11 @@ type Observer = (socket: SocketLike, url: string) => void
 
 /**
  * Socket → the URL the wrapper was given when it constructed it. The URL is
- * captured there rather than read off the socket: `SocketLike.url` is optional,
- * and an implementation that does not expose it would otherwise be classified
- * as a sibling and never closed (round 23).
+ * captured there rather than read off the socket: `SocketLike.url` used to be
+ * optional, and an implementation that omitted it was classified as a sibling
+ * and never closed (round 23). The member is gone from the interface now, so the
+ * classification cannot read it at all — the capture is what makes that safe
+ * rather than merely documented (round 25).
  */
 const live = new Map<SocketLike, string>()
 const observers = new Set<Observer>()
@@ -281,7 +288,7 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
       // to a socket it already constructed — not a stand-in for that socket.
       // Gateway only, like `closeGatewaySockets`: a sibling's owner is the one
       // that knows how to bring it back. The URL is the one this wrapper was
-      // handed, not `socket.url` (optional — round 23).
+      // handed — `SocketLike` has no `url` member to read (rounds 23-25).
       if (suspended && isGatewayWsUrl(url)) closeTracked(socket)
       return socket
     }

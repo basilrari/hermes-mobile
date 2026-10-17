@@ -187,6 +187,41 @@ describe('BootAutoRetry (HM-32)', () => {
     expect(coverText()).toBeNull()
   })
 
+  it('drops the cover when the budget is exhausted by a third, distinct failure (round 26 W1)', async () => {
+    // The give-up branch is reached from inside the successor of an armed window:
+    // the cleanup before it clears the latch, so the body runs — and returns
+    // without a reload and without an `onTimeout`. `retrying` was still true from
+    // the arm that preceded it, so the z-1500 cover sat over `BootFailureOverlay`
+    // (z-1400) with nothing armed: the branch whose comment says "let
+    // BootFailureOverlay handle it" is the one that masks it.
+    const boot = await failBoot()
+    render(createElement(BootAutoRetry))
+
+    await act(async () => {
+      vi.advanceTimersByTime(1100)
+    })
+    expect(coverText()).toBe('Reconnecting…')
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('1')
+
+    // A second, differently worded failure: the latch is cleared with the armed
+    // window and the retry re-arms, writing the last of the budget.
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: 'Sign in again', running: false })
+    })
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('2')
+
+    // A third distinct message spends nothing and gives up. Three different
+    // `failDesktopBoot` strings inside one mount is the ordinary shape of a cold
+    // boot on a waking radio, not a contrived state.
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: 'workspace unavailable', running: false })
+    })
+    expect(coverText()).toBeNull()
+    // Giving up hands the screen over; it does not refund the budget — only the
+    // connection edge does that.
+    expect(window.sessionStorage.getItem('hermes-boot-retries')).toBe('2')
+  })
+
   it('keeps the budget a reload landed with until the boot completes (round 22 W4)', async () => {
     const boot = await import('@/store/boot')
     window.sessionStorage.setItem('hermes-boot-retries', '1')

@@ -68,7 +68,18 @@ export function BootAutoRetry() {
 
     if (boot.error && !boot.running && !scheduled.current) {
       const tries = Number(window.sessionStorage.getItem(RETRY_KEY) || '0')
-      if (tries >= MAX_TRIES) return // give up — let BootFailureOverlay handle it
+      if (tries >= MAX_TRIES) {
+        // Give up — hand the screen to `BootFailureOverlay`. The cover has to come
+        // down with the handover: this branch is reached from the successor of an
+        // armed window (a third, differently worded failure), so `retrying` is
+        // still true from the arm that preceded it while the cleanup has already
+        // cancelled the timer and the waiter. Returning here left z-1500 over the
+        // z-1400 manual surface with nothing armed — the outcome this branch's
+        // comment claimed to hand over (round 26 W1). No budget is refunded: only
+        // the connection edge above does that.
+        setRetrying(false)
+        return
+      }
       scheduled.current = true
       window.sessionStorage.setItem(RETRY_KEY, String(tries + 1))
       setRetrying(true)

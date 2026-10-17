@@ -9,7 +9,7 @@ import { $panesFlipped } from '@/store/layout'
 import { $notifications, dismissNotification } from '@/store/notifications'
 import { onAppStateChange } from '~bridge/native'
 import { isGatewayWsUrl } from '~bridge/connection-config'
-import { onSocketCreated, setSuspended } from '~bridge/socket-lifecycle'
+import { onSocketCreated, setSuspended, type SocketLike } from '~bridge/socket-lifecycle'
 import { staleConnectionLostIds } from '~bridge/stale-alerts'
 
 /**
@@ -139,6 +139,11 @@ export function MobileBehaviors() {
     // remaining toast is the only actionable thing ("Reconnect now") a user has
     // while the gateway is still down. Resume only clears the suspend flag.
     let hiddenAtMs = 0
+    // The `open` listeners this mount attaches, so the cleanup can take them off
+    // again. `removeOpenWatch()` only drops the observer: a socket it already saw
+    // keeps the listener, and that closure holds the URL (which may carry
+    // `?token=`) and can still write to the store from a dead mount (round 26 S2).
+    const boundOpenListeners: { socket: SocketLike; onOpen: () => void }[] = []
     const dismissHiddenToasts = (): void => {
       if (hiddenAtMs === 0) return
       const title = translateNow('boot.errors.gatewayConnectionLost')
@@ -164,13 +169,15 @@ export function MobileBehaviors() {
     // the window the app was hidden for, so a toast raised on a visible app is left
     // alone. The observer sees every socket the wrapper builds, hence the check.
     const removeOpenWatch = onSocketCreated((socket, url) => {
-      socket.addEventListener('open', () => {
+      const onOpen = (): void => {
         // `url` is the one the wrapper constructed the socket with — the same
-        // value the close rule uses. `socket.url` is optional, and reading it here
-        // would leave the dismissal blind to exactly the shape the close handles
-        // (round 24 S1).
+        // value the close rule uses. `SocketLike` does not declare `url` at all
+        // any more (rounds 23-25), so reading it here would leave the dismissal
+        // blind to exactly the shape the close handles (round 24 S1).
         if (isGatewayWsUrl(url)) dismissHiddenToasts()
-      })
+      }
+      socket.addEventListener('open', onOpen)
+      boundOpenListeners.push({ socket, onOpen })
     })
 
     return () => {
@@ -179,6 +186,8 @@ export function MobileBehaviors() {
       backHandle?.remove()
       removeAppState()
       removeOpenWatch()
+      for (const { socket, onOpen } of boundOpenListeners) socket.removeEventListener('open', onOpen)
+      boundOpenListeners.length = 0
       // Deliberately no `setSuspended(false)` here — see the mount comment. The
       // next mount clears the flag, and until then the gate stays closed while the
       // app is hidden.

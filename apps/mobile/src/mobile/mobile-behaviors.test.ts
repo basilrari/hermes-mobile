@@ -76,6 +76,9 @@ function lifecycleWindow() {
         addEventListener(type: string, fn: () => void) {
           handlers.set(type, [...(handlers.get(type) ?? []), fn])
         },
+        removeEventListener(type: string, fn: () => void) {
+          handlers.set(type, (handlers.get(type) ?? []).filter((f) => f !== fn))
+        },
         fire(type: string) {
           for (const fn of handlers.get(type) ?? []) fn()
         },
@@ -203,6 +206,26 @@ describe('the connection-lost toast is dismissed only on recovery (HM-32)', () =
     act(() => new Socket(GATEWAY_URL).fire('open'))
     expect($notifications.get()).toEqual([])
     view.unmount()
+  })
+
+  it('stops watching a socket it saw when it unmounts, so a dead mount cannot dismiss (round 26 S2)', () => {
+    const { win } = lifecycleWindow()
+    installSocketLifecycle(win as never)
+    const view = mount()
+    act(() => appState()({ isActive: false }))
+    const Socket = win.WebSocket as unknown as new (url: string) => { fire: (t: string) => void }
+    // The observer binds this socket's `open` while the window is open.
+    const socket = new Socket(GATEWAY_URL)
+
+    // The 401 path: the component goes away while hidden, and the socket it saw
+    // can still be open — `removeOpenWatch()` only drops the observer, not the
+    // listener already attached to this socket. A late `open` must not run the
+    // dead mount's dismissal: the toast below was raised after it left.
+    view.unmount()
+    const id = raiseLossAlert()
+    act(() => socket.fire('open'))
+
+    expect($notifications.get().map((n) => n.id)).toEqual([id])
   })
 
   it('leaves a toast raised on a visible app alone once the window is spent', () => {

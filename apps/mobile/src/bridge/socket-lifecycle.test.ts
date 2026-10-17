@@ -35,6 +35,9 @@ function fakeSocket(url = 'wss://gw.example/api/ws') {
     addEventListener(type: string, listener: () => void) {
       listeners.set(type, [...(listeners.get(type) ?? []), listener])
     },
+    removeEventListener(type: string, listener: () => void) {
+      listeners.set(type, (listeners.get(type) ?? []).filter((fn) => fn !== listener))
+    },
     emit(type: string) {
       for (const fn of listeners.get(type) ?? []) fn()
     },
@@ -178,9 +181,10 @@ describe('socket lifecycle', () => {
   })
 
   it('closes a gateway socket that does not expose `url` (the wrapper knows the URL it was given)', () => {
-    // `SocketLike.url` is optional, so a socket implementation that omits it
-    // must not be read as "a sibling" — that skipped the close with no gap note
-    // and no failing test (round 23 W1). The wrapper captured the URL itself.
+    // `SocketLike` used to declare `url` as optional (round 23), so a socket
+    // implementation that omitted it must not be read as "a sibling" — that
+    // skipped the close with no gap note and no failing test. The member is gone
+    // from the interface now; the wrapper captured the URL itself (round 25).
     const closed: Array<{ code?: number; reason?: string }> = []
     const win = {
       WebSocket: function (this: unknown, _url: string) {
