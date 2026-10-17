@@ -99,9 +99,17 @@ export function onPowerResume(callback: () => void): () => void {
  * `active` is true when the app is on screen. Returns an unsubscribe.
  */
 export function onAppStateChange(callback: (active: boolean) => void): () => void {
-  // Same catch as the keyboard listeners: a missing plugin rejects, and an
-  // unhandled rejection must not take down the effect that owns the socket.
-  const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive)).catch(() => null)
+  // A rejected registration is caught so it cannot take down the effect that
+  // owns the socket — but it must not be silent: this listener is the only
+  // caller of `setSuspended`, so a plugin that fails to register means the
+  // socket stays open on every background with nothing else to show for it
+  // (HM-32 review). One `console.warn` reaches logcat in a release build.
+  const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive)).catch(
+    (err: unknown) => {
+      console.warn('[hm-32] appStateChange did not register: socket will stay open while hidden', err)
+      return null
+    },
+  )
   return () => {
     void handle.then((h) => h?.remove())
   }

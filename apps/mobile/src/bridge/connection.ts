@@ -37,18 +37,32 @@ export function mobileConnectionId(baseUrl: string): string {
   return `mobile-${host.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
 }
 
+/**
+ * Thrown by the dial path while the app is backgrounded (HM-32). A distinct type
+ * so a caller that is not dialing — `getConnectionFor`, the connect screen's own
+ * `getGatewayWsUrl` — can tell "this was suppressed because the app is hidden"
+ * from a real transport failure.
+ */
+export class GatewayDialSuppressed extends Error {
+  constructor() {
+    super('app backgrounded: gateway dial suppressed')
+    this.name = 'GatewayDialSuppressed'
+  }
+}
+
 /** Build the WS URL the gateway client connects with. OAuth/password gateways
  *  mint a fresh ticket; token gateways embed the long-lived token. */
 export async function getGatewayWsUrl(): Promise<string> {
-  // HM-32 review: the renderer redials on close (`scheduleReconnect` in the
-  // vendored boot hook), so closing the socket on backgrounding would re-mint a
-  // ticket and dial every ≤15s for the whole hidden window — more background
-  // traffic than leaving the socket open, the opposite of why it is closed.
+  // HM-32: the renderer redials on close (`scheduleReconnect` in the vendored
+  // boot hook), so closing the socket on backgrounding would re-mint a ticket
+  // and dial every ≤15s for the whole hidden window — more background traffic
+  // than leaving the socket open, the opposite of why it is closed.
   // Failing here is the mobile-owned gate (no vendored patch): the ladder gets
-  // no ticket and no URL, so it cannot dial. It retries from a 300ms base, and
-  // resume runs getConnection again immediately, so the flag clears one tick
-  // after the app is visible.
-  if (isSuspended()) throw new Error('app backgrounded: gateway dial suppressed')
+  // no ticket and no URL, so it cannot dial. Nothing in this file clears the
+  // flag — `mobile-behaviors.tsx` owns `appStateChange` and calls
+  // `setSuspended(false)` on the resume edge, after which the next attempt
+  // resolves normally (measured: 3ms after `visibilitychange`).
+  if (isSuspended()) throw new GatewayDialSuppressed()
   const target = await requireTarget()
   if (target.authMode === 'oauth') {
     const ticket = await mintWsTicket(target.baseUrl)

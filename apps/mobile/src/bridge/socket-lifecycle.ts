@@ -45,6 +45,8 @@ type Observer = (socket: SocketLike) => void
 const live = new Set<SocketLike>()
 const observers = new Set<Observer>()
 let suspended = false
+/** One `console.warn` per window-less install, so a missing constructor is not spam. */
+let warnedMissingConstructor = false
 
 /** Legal in Chromium. 1001 is reserved and throws from script. */
 const CLOSE_CODE = 1000
@@ -85,6 +87,7 @@ export function resetSocketLifecycleForTests(): void {
   suspended = false
   live.clear()
   observers.clear()
+  warnedMissingConstructor = false
 }
 
 /**
@@ -135,7 +138,21 @@ export function setSuspended(next: boolean): void {
 export function installSocketLifecycle(win: LifecycleWindow = globalThis as unknown as LifecycleWindow): void {
   if (isSocketLifecycleInstalled(win)) return
   const Original = win.WebSocket
-  if (typeof Original === 'function' && !(Original as { __hermesLifecycleTracked?: boolean }).__hermesLifecycleTracked) {
+  if (typeof Original !== 'function') {
+    // Fail visibly, once. Marking the window installed here (the round-3 shape)
+    // made an unwrapped constructor indistinguishable from a wrapped one, and
+    // `isSocketLifecycleInstalled()` also routes `installRpcTrace` to the
+    // observer branch — so tracing went quiet in the same breath. The only
+    // observable of that failure was "the battery did not improve".
+    // `console.warn` reaches logcat in a release build too, where the RPC trace
+    // is inert by design (`VITE_HERMES_TRACE=false`).
+    if (!warnedMissingConstructor) {
+      warnedMissingConstructor = true
+      console.warn('[hm-32] WebSocket is not a constructor: socket lifecycle NOT installed')
+    }
+    return
+  }
+  if (!(Original as { __hermesLifecycleTracked?: boolean }).__hermesLifecycleTracked) {
     const Wrapped = function (this: unknown, url: string, protocols?: string | string[]): SocketLike {
       const socket =
         protocols === undefined

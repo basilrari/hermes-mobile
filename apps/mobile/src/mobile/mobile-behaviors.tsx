@@ -4,9 +4,12 @@ import { useEffect } from 'react'
 import { useLocation } from 'react-router'
 
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
+import { translateNow } from '@/i18n'
 import { $panesFlipped } from '@/store/layout'
+import { $notifications, dismissNotification } from '@/store/notifications'
 import { onAppStateChange } from '~bridge/native'
 import { setSuspended } from '~bridge/socket-lifecycle'
+import { staleConnectionLostIds } from '~bridge/stale-alerts'
 
 /**
  * MobileBehaviors — the touch adaptations layered over the reused desktop UI.
@@ -109,8 +112,26 @@ export function MobileBehaviors() {
     // HM-32: close tracked sockets when the app leaves the screen, and close any
     // the renderer opens while it is still hidden. Resume only clears the flag.
     // The ticket request before that constructor is still the rest of HM-32.
+    //
+    // While hidden, every ladder step is a failed attempt (the gate in
+    // connection.ts), so the vendored boot hook's 300 s escalation raises a
+    // "Hermes lost its connection" toast with `durationMs: 0` — no timer, and
+    // nothing on the reconnect path dismisses it. A toast raised while we were
+    // hidden is a false alarm once the socket is back, so dismiss those on
+    // resume. A real outage re-escalates ~300 s later.
+    let hiddenSince = 0
     const removeAppState = onAppStateChange((active) => {
       setSuspended(!active)
+      if (!active) {
+        hiddenSince = Date.now()
+        return
+      }
+      if (hiddenSince === 0) return
+      const title = translateNow('boot.errors.gatewayConnectionLost')
+      for (const id of staleConnectionLostIds($notifications.get(), title, hiddenSince)) {
+        dismissNotification(id)
+      }
+      hiddenSince = 0
     })
 
     return () => {

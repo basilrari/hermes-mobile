@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import {
   closeAllSockets,
   installSocketLifecycle,
+  isSocketLifecycleInstalled,
   isSuspended,
   liveSocketCount,
   onSocketCreated,
@@ -211,5 +212,26 @@ describe('socket lifecycle', () => {
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
     new Socket('wss://example/a')
     expect(created).toHaveLength(1)
+  })
+
+  it('does not claim to be installed when there is no WebSocket constructor (HM-32 review)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const win: { WebSocket?: unknown; __hermesSocketLifecycleInstalled?: boolean } = {}
+
+    installSocketLifecycle(win as never)
+
+    expect(isSocketLifecycleInstalled(win)).toBe(false)
+    expect(warn).toHaveBeenCalledTimes(1)
+
+    // A second install on the same empty window must not spam the log.
+    installSocketLifecycle(win as never)
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
+  it('marks the window installed once the wrapper is really in place', () => {
+    const { win } = freshWindow()
+    installSocketLifecycle(win as never)
+    expect(isSocketLifecycleInstalled(win)).toBe(true)
   })
 })

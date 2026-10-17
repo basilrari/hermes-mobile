@@ -28,7 +28,7 @@ vi.mock('@capacitor/preferences', () => {
 })
 
 import { mintWsTicket, passwordLogin, probeGateway } from './auth'
-import { getConnection, getGatewayWsUrl } from './connection'
+import { getConnection, getGatewayWsUrl, GatewayDialSuppressed } from './connection'
 import { api } from './http'
 import { resetSocketLifecycleForTests, setSuspended } from './socket-lifecycle'
 import { setTarget } from './state'
@@ -115,8 +115,11 @@ describe('gateway dial while the app is backgrounded (HM-32)', () => {
     setSuspended(true)
     httpSpy.mockResolvedValue(ok({ ticket: 'never-minted' }))
 
+    // A distinct type: callers that are not dialing can tell a suppressed dial
+    // from a transport failure (round-4 review, connection.ts).
+    await expect(getGatewayWsUrl()).rejects.toBeInstanceOf(GatewayDialSuppressed)
+    await expect(getConnection()).rejects.toBeInstanceOf(GatewayDialSuppressed)
     await expect(getGatewayWsUrl()).rejects.toThrow(/backgrounded/i)
-    await expect(getConnection()).rejects.toThrow(/backgrounded/i)
     expect(httpSpy).not.toHaveBeenCalled()
   })
 
