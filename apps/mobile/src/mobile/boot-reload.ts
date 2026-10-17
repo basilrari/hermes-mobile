@@ -17,6 +17,12 @@
  * edge (round 16). Sampling loses the reload when the WebView reports visible
  * before `onResume` clears the gate, and nothing would wake the waiter again.
  *
+ * The re-check runs on a microtask (round 17): the gate's writer and this waiter
+ * are both listeners on the same `notifyListeners` dispatch, which runs in
+ * registration order, so a synchronous re-check could run before the gate opens and
+ * be lost. A microtask runs after the whole dispatch, which makes the registration
+ * order irrelevant.
+ *
  * The wait is bounded, and the bound does NOT reload blind — a reload while hidden
  * is the defect above, on a clock instead of on a signal. At `timeoutMs` the waiter
  * reports the stall through `onTimeout` (the caller drops its "Reconnecting…" cover
@@ -45,11 +51,12 @@ export interface ReloadOptions {
    */
   isOnScreen?: () => boolean
   /**
-   * Subscribe to the platform's foreground channel (the caller wires
-   * `onAppStateChange`). Its edge is the other half of `isOnScreen`, so the waiter
-   * must listen to it too. Returns an unsubscribe.
+   * Subscribe to the platform's foreground channel — the caller wires
+   * `onAppStateChange`. Its edge is the other half of `isOnScreen`, so the waiter
+   * must listen to it too. Required on purpose: optional would let a second caller
+   * silently get the one-channel waiter round 16 filed. Returns an unsubscribe.
    */
-  watchResume?: (recheck: () => void) => () => void
+  watchResume: (recheck: () => void) => () => void
 }
 
 /** Default bound on the deferred wait, in ms. */
@@ -59,12 +66,7 @@ const noop = (): void => {}
 
 export function reloadWhenVisible(
   win: ReloadWindow = window as unknown as ReloadWindow,
-  {
-    timeoutMs = HIDDEN_RELOAD_TIMEOUT_MS,
-    onTimeout,
-    isOnScreen,
-    watchResume,
-  }: ReloadOptions = {},
+  { timeoutMs = HIDDEN_RELOAD_TIMEOUT_MS, onTimeout, isOnScreen, watchResume }: ReloadOptions,
 ): () => void {
   const onScreen = isOnScreen ?? ((): boolean => win.document.visibilityState === 'visible' && !isSuspended())
 
@@ -79,7 +81,7 @@ export function reloadWhenVisible(
 
   const stop = (): void => {
     armed = false
-    win.document.removeEventListener('visibilitychange', tryReload)
+    win.document.removeEventListener('visibilitychange', recheck)
     unwatchResume()
     unwatchResume = noop
     if (timer !== undefined) clearTimeout(timer)
@@ -90,20 +92,31 @@ export function reloadWhenVisible(
     win.location.reload()
   }
 
-  /** Both edges land here: reload only while the whole condition holds. */
-  function tryReload(): void {
-    if (!armed || !onScreen()) return
-    reload()
+  /** Both edges land here; the reload only happens while the whole condition holds. */
+  function recheck(): void {
+    if (!armed) return
+    queueMicrotask(() => {
+      if (!armed || !onScreen()) return
+      reload()
+    })
   }
 
-  win.document.addEventListener('visibilitychange', tryReload)
-  unwatchResume = watchResume?.(tryReload) ?? noop
+  win.document.addEventListener('visibilitychange', recheck)
 
   // Report the stall; do not reload. A reload here is the hidden dial this module
   // exists to prevent (round 12), so the waiter stays armed for either edge.
+  // Armed before the subscription as belt-and-braces: today the re-check is a
+  // microtask, so a channel that replays on subscribe cannot reach `stop()` before
+  // the rest of this function has run — but the ordering costs nothing and the
+  // alternative fails silently if that ever changes.
   timer = setTimeout(() => {
     timer = undefined
     onTimeout?.()
   }, timeoutMs)
+
+  const unsubscribe = watchResume(recheck)
+  if (armed) unwatchResume = unsubscribe
+  else unsubscribe()
+
   return stop
 }

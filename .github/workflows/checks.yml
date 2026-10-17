@@ -68,6 +68,31 @@ jobs:
         working-directory: apps/mobile
         run: npm run typecheck
 
+  synced-config:
+    name: synced config guard (cap sync)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install (skip Electron native builds)
+        run: npm ci --ignore-scripts
+      - name: Apply patches
+        run: npx patch-package && node scripts/apply-upstream-patches.mjs
+      # The artefact half of the loggingBehaviour guard: `sync:android` runs
+      # `cap sync` and then `scripts/check-capacitor-config.mjs`, so this job
+      # exercises the real producer path instead of a fixture. A change that
+      # removes the guard from the script, or that lets a leaking value back into
+      # `capacitor.config.ts`, goes red here — no emulator or SDK needed, `cap
+      # sync` only copies the config and web assets.
+      - name: Build the web bundle
+        run: npm run build:mobile
+      - name: Sync the Android config and run the guard
+        run: npm run sync:android
+
   upstream-patches:
     name: carried upstream patches
     runs-on: ubuntu-latest

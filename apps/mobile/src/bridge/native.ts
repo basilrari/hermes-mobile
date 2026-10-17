@@ -117,7 +117,12 @@ export function onAppStateChange(callback: (active: boolean) => void): () => voi
       // Still no free-form text: no message, no stack, no URL.
       const code = (err as { code?: unknown } | null)?.code
       const reason = typeof code === 'string' && code ? code : err instanceof Error ? err.name : typeof err
-      reportLifecycleGap(`appStateChange did not register: socket will stay open while hidden (${reason})`)
+      // Two consequences now, and the note names both: the socket is not closed on
+      // background, and the deferred boot reload loses its only wake-up channel
+      // (`boot-reload.ts` watches this event for the gate opening, round 17).
+      reportLifecycleGap(
+        `appStateChange did not register: socket stays open while hidden; boot reload has no resume wake-up (${reason})`,
+      )
       return null
     },
   )
