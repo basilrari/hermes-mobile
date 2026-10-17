@@ -17,6 +17,7 @@
  * WebSocket wrap, no global).
  */
 
+import { onLifecycleGap } from './lifecycle-gap'
 import { isSocketLifecycleInstalled, onSocketCreated, type SocketLike } from './socket-lifecycle'
 
 export type TraceDirection = 'in' | 'out' | 'rest'
@@ -326,6 +327,11 @@ export function installRpcTrace(win: TraceWindow = globalThis as unknown as Trac
     clear: () => rpcTrace.clear(),
     size: () => rpcTrace.size,
   }
+  // A control that could not install itself leaves no other trace of the fact
+  // (lifecycle-gap.ts). The note is metadata only, like every other entry, and
+  // it is readable on-device where `console.*` is not on a release build.
+  onLifecycleGap((message) => rpcTrace.record({ dir: 'rest', name: `lifecycle: ${message}`, ok: false }))
+
   win.__hermesRpcTraceInstalled = true
   return rpcTrace
 }

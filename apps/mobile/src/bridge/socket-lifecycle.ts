@@ -14,9 +14,11 @@
  * shipped app cannot live behind that flag. Here the dependency runs the other
  * way: the trace registers as an observer of this module.
  *
- * Scope, stated honestly: a socket does not stay open while hidden. The
- * renderer still asks for a ticket and arms its reconnect timer before the
- * constructor runs. That request path is the rest of HM-32, not this module.
+ * Scope, stated honestly: a socket does not stay open while hidden. The renderer
+ * still arms its reconnect timer before the constructor runs; the dial itself is
+ * refused while suspended (the gate in `connection.ts`), and the request
+ * reduction HM-32's acceptance line asks for is that issue's remaining task, not
+ * this module's.
  *
  * The close code is 1000. A script may send 1000 or 3000-4999; 1001 ("going
  * away") throws InvalidAccessError in Chromium, which is the Android WebView.
@@ -26,6 +28,8 @@
  * `isActive: false` while the app stays hidden, so that retry guards this
  * module's contract, not an event the plugin emits.
  */
+
+import { reportLifecycleGap, resetLifecycleGapForTests } from './lifecycle-gap'
 
 /** The subset of WebSocket this module relies on. */
 export interface SocketLike {
@@ -88,6 +92,7 @@ export function resetSocketLifecycleForTests(): void {
   live.clear()
   observers.clear()
   warnedMissingConstructor = false
+  resetLifecycleGapForTests()
 }
 
 /**
@@ -144,12 +149,12 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
     // `isSocketLifecycleInstalled()` also routes `installRpcTrace` to the
     // observer branch — so tracing went quiet in the same breath. The only
     // observable of that failure was "the battery did not improve".
-    // `console.warn` reaches logcat in the shipping build because
-    // `capacitor.config.ts` sets `loggingBehavior: 'production'`; Capacitor's
-    // default ('debug') drops WebView console output on a non-debuggable APK.
+    // The note goes to the console AND to the RPC trace (lifecycle-gap.ts): the
+    // trace is metadata-only and is what the app can show on-device, which
+    // `console.*` cannot on a release APK.
     if (!warnedMissingConstructor) {
       warnedMissingConstructor = true
-      console.warn('[hm-32] WebSocket is not a constructor: socket lifecycle NOT installed')
+      reportLifecycleGap('WebSocket is not a constructor: socket lifecycle NOT installed')
     }
     return
   }

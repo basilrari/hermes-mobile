@@ -249,6 +249,19 @@ describe('installRpcTrace on top of the socket lifecycle', () => {
     expect(dirs()).toEqual(['out:sessions.list'])
   })
 
+  it('records a lifecycle gap raised before the trace was installed', () => {
+    resetSocketLifecycleForTests()
+    rpcTrace.clear()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // boot.ts order: lifecycle first (this window has no constructor, so the
+    // control cannot install), trace second.
+    const win = {} as unknown as Parameters<typeof installSocketLifecycle>[0]
+    installSocketLifecycle(win)
+    installRpcTrace(win as never)
+    expect(dirs()).toEqual(['rest:lifecycle: WebSocket is not a constructor: socket lifecycle NOT installed'])
+    vi.mocked(console.warn).mockRestore()
+  })
+
   it('never instruments one socket twice, however many paths reach it', () => {
     resetSocketLifecycleForTests()
     const trace = new RpcTrace()

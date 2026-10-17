@@ -13,6 +13,8 @@ import { Share } from '@capacitor/share'
 
 import type { HermesNotification } from '@/../electron/notification-types'
 
+import { reportLifecycleGap } from './lifecycle-gap'
+
 /**
  * Write `text` to a cache file and open the native share sheet (HM-05: the
  * debug RPC trace). Returns false when sharing is unavailable, so a caller can
@@ -103,11 +105,11 @@ export function onAppStateChange(callback: (active: boolean) => void): () => voi
   // owns the socket — but it must not be silent: this listener is the only
   // caller of `setSuspended`, so a plugin that fails to register means the
   // socket stays open on every background with nothing else to show for it
-  // (HM-32 review). `loggingBehavior: 'production'` in `capacitor.config.ts` is
-  // what gets this warn to logcat on a non-debuggable APK.
+  // (HM-32 review). Note goes to the trace as well, which is readable on a
+  // release build; `console.*` is not (lifecycle-gap.ts).
   const handle = App.addListener('appStateChange', ({ isActive }) => callback(isActive)).catch(
     (err: unknown) => {
-      console.warn('[hm-32] appStateChange did not register: socket will stay open while hidden', err)
+      reportLifecycleGap(`appStateChange did not register: socket will stay open while hidden (${String(err)})`)
       return null
     },
   )

@@ -8,7 +8,7 @@ import { translateNow } from '@/i18n'
 import { $panesFlipped } from '@/store/layout'
 import { $notifications, dismissNotification } from '@/store/notifications'
 import { onAppStateChange } from '~bridge/native'
-import { setSuspended } from '~bridge/socket-lifecycle'
+import { onSocketCreated, setSuspended } from '~bridge/socket-lifecycle'
 import { staleConnectionLostIds } from '~bridge/stale-alerts'
 
 /**
@@ -111,27 +111,45 @@ export function MobileBehaviors() {
 
     // HM-32: close tracked sockets when the app leaves the screen, and close any
     // the renderer opens while it is still hidden. Resume only clears the flag.
-    // The ticket request before that constructor is still the rest of HM-32.
+    //
+    // The flag is a module global, and this effect owns the only `appStateChange`
+    // listener that clears it. A 401 while hidden unmounts this component
+    // (http.ts → requireReauth → app.tsx leaves the connected tree) and the
+    // plugin does not replay `isActive: true` to the listener the next login
+    // mounts, so a stale `true` would gate every dial on a visible app. Clear it
+    // on mount as well as on unmount: a remount while active cannot inherit it.
+    setSuspended(false)
     //
     // While hidden, every ladder step is a failed attempt (the gate in
     // connection.ts), so the vendored boot hook's 300 s escalation raises a
     // "Hermes lost its connection" toast with `durationMs: 0` — no timer, and
     // nothing on the reconnect path dismisses it. A toast raised while we were
-    // hidden is a false alarm once the socket is back, so dismiss those on
-    // resume. A real outage re-escalates ~300 s later.
+    // hidden is a false alarm once the connection is back, so drop those on the
+    // resume edge AND when a socket opens (Android delivers `appStateChange` and
+    // `resume` as two listener calls, so a toast can land between them). A real
+    // outage re-escalates ~300 s later: `reconnectNow` clears `escalated` first.
     let hiddenSince = 0
+    const dismissHiddenToasts = (): void => {
+      if (hiddenSince === 0) return
+      const title = translateNow('boot.errors.gatewayConnectionLost')
+      for (const id of staleConnectionLostIds($notifications.get(), title, hiddenSince)) {
+        dismissNotification(id)
+      }
+    }
+
     const removeAppState = onAppStateChange((active) => {
       setSuspended(!active)
       if (!active) {
         hiddenSince = Date.now()
         return
       }
-      if (hiddenSince === 0) return
-      const title = translateNow('boot.errors.gatewayConnectionLost')
-      for (const id of staleConnectionLostIds($notifications.get(), title, hiddenSince)) {
-        dismissNotification(id)
-      }
-      hiddenSince = 0
+      dismissHiddenToasts()
+    })
+
+    // A socket that opens is proof the connection is fine, so any connection-lost
+    // toast is stale by definition — including one raised after the resume edge.
+    const removeOpenWatch = onSocketCreated((socket) => {
+      socket.addEventListener('open', () => dismissHiddenToasts())
     })
 
     return () => {
@@ -139,6 +157,8 @@ export function MobileBehaviors() {
       document.removeEventListener('pointerdown', onPointerDown, true)
       backHandle?.remove()
       removeAppState()
+      removeOpenWatch()
+      setSuspended(false)
       void kbShow.then((h) => h?.remove())
       void kbHide.then((h) => h?.remove())
       document.documentElement.removeAttribute('data-drawer-open')
