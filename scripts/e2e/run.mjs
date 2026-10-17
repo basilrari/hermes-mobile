@@ -612,10 +612,13 @@ async function main() {
   const external = process.env.HERMES_E2E_GATEWAY_URL
   const mock = external ? null : await startMockGateway({ logPath: path.join(shotDir, 'mock-gateway.log') })
   const gatewayUrl = external ?? mock.url
-  const token = external ? (process.env.HERMES_E2E_TOKEN ?? 'e2e-token') : mock.token
+  // The fallback lets a URL-only run authenticate. It is not a supplied credential.
+  const suppliedToken = process.env.HERMES_E2E_TOKEN
+  const token = external ? (suppliedToken ?? 'e2e-token') : mock.token
 
   // Never print the credential; say only whether one was supplied.
-  console.log(`harness: target=${external ? 'HERMES_E2E_GATEWAY_URL' : 'mock gateway'} credential=${token ? 'set' : 'none'}`)
+  const credential = external ? (suppliedToken ? 'set' : 'none') : 'set'
+  console.log(`harness: target=${external ? 'HERMES_E2E_GATEWAY_URL' : 'mock gateway'} credential=${credential}`)
 
   const { server, port } = await serveDist()
   const origin = `http://127.0.0.1:${port}`

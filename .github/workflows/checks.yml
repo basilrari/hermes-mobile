@@ -58,6 +58,9 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Apply patches
         run: npx patch-package
+      # Same script the bundle and e2e jobs run. A carried patch missing here
+      # would be absent from the tree the unit tests run.
+      - run: node scripts/apply-upstream-patches.mjs
       - name: Unit tests
         working-directory: apps/mobile
         run: npm test

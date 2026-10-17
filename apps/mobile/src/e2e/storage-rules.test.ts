@@ -40,6 +40,15 @@ describe('isConversationState (HM-13 deny-list)', () => {
     }
   })
 
+  it('flags the in-flight turn journal — prompts and assistant rows, not a UI pref', () => {
+    expect(isConversationState('hermes.desktop.inflightTurnJournal.v2:sess-1')).toBe(true)
+    expect(isConversationState('hermes.desktop.inflightTurnJournal.v1')).toBe(true)
+    expect(classifyStorageKey('hermes.desktop.inflightTurnJournal.v2:sess-1').kind).toBe('conversation state')
+    // A migration flag is not a payload, and a layout key stays a UI pref.
+    expect(isConversationState('hermes.desktop.inflightTurnJournal.v2.migrated')).toBe(false)
+    expect(classifyStorageKey('hermes.desktop.layoutTree.v2').kind).toBe('ui pref / rebuildable cache')
+  })
+
   it('does not flag UI preferences that merely contain a near-miss word', () => {
     for (const key of [
       'hermes.desktop.layoutTree.v2',
