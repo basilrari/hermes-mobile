@@ -16,24 +16,34 @@
  * as an observer of this module, and a gap note reaches it when one exists
  * (lifecycle-gap.ts).
  *
- * Scope, stated honestly: a socket does not stay open while hidden, including on
- * the failure path. The flag starts `false` in a fresh module instance, so a
- * reload would re-arm the gate while the app is still hidden; `BootAutoRetry`
- * therefore reloads only once the app is on screen again (`reloadWhenVisible`,
- * `boot-reload.ts`). Within a hidden window the renderer still arms its reconnect
- * timer before the constructor runs; the dial itself is refused while suspended
- * (the gate in `connection.ts`), and the request reduction HM-32's acceptance
- * line asks for is that issue's remaining task, not this module's.
+ * Scope, stated honestly: the GATEWAY socket does not stay open while hidden,
+ * including on the failure path. Siblings are not touched — plugin streams
+ * (`/api/plugins/…`), dictation (`/api/audio/transcribe-stream`) and the Bot
+ * Screen RFB stream (`/api/display/ws`) have no resume path of their own, so a
+ * close here strands them: the RFB pane re-attaches out of `conn === 'idle'` on
+ * `disconnect`, the wrapper closes that fresh socket in its constructor, noVNC
+ * takes its `_fail` path (`clean: false`) and the pane parks on "stream lost"
+ * with nothing to re-attach it (`screen-pane.tsx`, `@novnc/novnc` 1.7
+ * `rfb.js` `_socketClose`). Their background traffic is HM-32's remaining work,
+ * not something to buy by breaking the pane. The flag starts `false` in a fresh
+ * module instance, so a reload would re-arm the gate while the app is still
+ * hidden; `BootAutoRetry` therefore reloads only once the app is on screen again
+ * (`reloadWhenVisible`, `boot-reload.ts`). Within a hidden window the renderer
+ * still arms its reconnect timer before the constructor runs; the dial itself is
+ * refused while suspended (the gate in `connection.ts`), and the request
+ * reduction HM-32's acceptance line asks for is that issue's remaining task, not
+ * this module's.
  *
  * The close code is 1000. A script may send 1000 or 3000-4999; 1001 ("going
  * away") throws InvalidAccessError in Chromium, which is the Android WebView.
  * A close that throws is not "already closing": the socket stays tracked, and
  * a re-asserted suspend (`setSuspended(true)` while already suspended, or
- * `closeAllSockets()`) retries it. `appStateChange` does not deliver a second
+ * `closeGatewaySockets()`) retries it. `appStateChange` does not deliver a second
  * `isActive: false` while the app stays hidden, so that retry guards this
  * module's contract, not an event the plugin emits.
  */
 
+import { isGatewayWsUrl } from './connection-config'
 import { reportLifecycleGap, resetLifecycleGapForTests } from './lifecycle-gap'
 
 /** The subset of WebSocket this module relies on. */
@@ -169,29 +179,35 @@ function closeTracked(socket: SocketLike, code = CLOSE_CODE, reason = CLOSE_REAS
 }
 
 /**
- * Close every tracked socket. Returns how many `close` calls returned.
+ * Close every tracked GATEWAY socket. Returns how many `close` calls returned.
  * A call that throws does not count, and that socket stays in the set.
+ *
+ * Siblings (`/api/plugins/…`, dictation, Bot Screen RFB) are held to their own
+ * lifecycles: only the gateway socket has a redial on resume (`reconnectNow`),
+ * so closing them here is a stream lost with nothing to bring it back — see the
+ * module header.
  */
-export function closeAllSockets(code = CLOSE_CODE, reason = CLOSE_REASON): number {
+export function closeGatewaySockets(code = CLOSE_CODE, reason = CLOSE_REASON): number {
   let closed = 0
   for (const socket of [...live]) {
+    if (!isGatewayWsUrl(socket.url)) continue
     if (closeTracked(socket, code, reason)) closed++
   }
   return closed
 }
 
 /**
- * Background/foreground the socket layer. Suspending closes everything, and a
- * repeat suspend retries any close that threw. Resuming only clears the flag,
- * so the renderer's next dial proceeds normally.
+ * Background/foreground the gateway socket layer. Suspending closes the gateway
+ * socket, and a repeat suspend retries any close that threw. Resuming only
+ * clears the flag, so the renderer's next dial proceeds normally.
  */
 export function setSuspended(next: boolean): void {
   if (next === suspended) {
-    if (next && live.size > 0) closeAllSockets()
+    if (next && live.size > 0) closeGatewaySockets()
     return
   }
   suspended = next
-  if (next) closeAllSockets()
+  if (next) closeGatewaySockets()
 }
 
 /**
@@ -247,7 +263,9 @@ export function installSocketLifecycle(win: LifecycleWindow = globalThis as unkn
 
       // The renderer dials on close. Closing here is the same close, applied
       // to a socket it already constructed — not a stand-in for that socket.
-      if (suspended) closeTracked(socket)
+      // Gateway only, like `closeGatewaySockets`: a sibling's owner is the one
+      // that knows how to bring it back.
+      if (suspended && isGatewayWsUrl(socket.url)) closeTracked(socket)
       return socket
     }
     ;(Wrapped as unknown as { prototype: unknown }).prototype = (Original as { prototype: unknown }).prototype

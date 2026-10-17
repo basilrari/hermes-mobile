@@ -110,8 +110,8 @@ export function MobileBehaviors() {
       })
       .catch(() => {})
 
-    // HM-32: close tracked sockets when the app leaves the screen, and close any
-    // the renderer opens while it is still hidden. Resume only clears the flag.
+    // HM-32: close the gateway socket when the app leaves the screen, and close
+    // one the renderer opens while it is still hidden. Resume only clears the flag.
     //
     // The flag is a module global, and this effect owns the only `appStateChange`
     // listener that clears it. A 401 while hidden unmounts this component

@@ -42,10 +42,13 @@ export function mobileConnectionId(baseUrl: string): string {
  * resolver (`getGatewayWsUrl`), so every caller that resolves a connection sees
  * it — including the non-dialing ones (`getConnectionFor`, the connect screen).
  * The type exists so those callers can tell "not while hidden" from a real
- * transport failure; none of them branch on it today, they fall back to the
- * descriptor or URL they already hold (`store/profile.ts`, `api/plugins.ts`),
- * which is the intended behaviour: nothing should resolve a fresh dial target
- * in the background, and nothing should report it as an outage either.
+ * transport failure; none of them branch on it today. `store/profile.ts` falls
+ * back to the descriptor it already holds. `api/plugins.ts` holds none: its
+ * `activeConnection()` catch resolves null, `pluginSocket` returns before it
+ * creates a socket and before it wires `onclose`, so that reconnect loop stops
+ * rather than re-dialing and the pane keeps its polling fallback. Either way
+ * nothing resolves a fresh dial target in the background, and nothing reports
+ * it as an outage.
  */
 export class GatewayDialSuppressed extends Error {
   constructor() {

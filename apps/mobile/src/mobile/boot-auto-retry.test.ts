@@ -97,4 +97,22 @@ describe('BootAutoRetry (HM-32)', () => {
     expect(coverText()).toBeNull()
     expect(boot.$desktopBoot.get().error).toBe('gateway did not answer')
   })
+
+  it('drops the cover when the boot recovers without a reload', async () => {
+    const boot = await failBoot()
+    render(createElement(BootAutoRetry))
+
+    await act(async () => {
+      vi.advanceTimersByTime(1100)
+    })
+    expect(coverText()).toBe('Reconnecting…')
+
+    // The boot comes back by another route while the waiter is still armed for a
+    // reload: nothing reloads, so nothing else would ever clear the cover, and it
+    // is z-1500 over an app that already works (round 21 S3).
+    await act(async () => {
+      boot.$desktopBoot.set({ ...boot.$desktopBoot.get(), error: null, running: true })
+    })
+    expect(coverText()).toBeNull()
+  })
 })

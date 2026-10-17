@@ -40,6 +40,11 @@ export function BootAutoRetry() {
   useEffect(() => {
     if (boot.running && !boot.error) {
       window.sessionStorage.removeItem(RETRY_KEY)
+      // A boot that recovered by another route leaves this cover mounted over a
+      // working app unless it is dropped here: the reload never fires, so the
+      // cleanup below only cancels the waiter. The cover is z-1500 and the app
+      // underneath is already usable (S3, round 21).
+      setRetrying(false)
       return
     }
 

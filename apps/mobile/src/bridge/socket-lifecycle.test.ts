@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import {
-  closeAllSockets,
+  closeGatewaySockets,
   installSocketLifecycle,
   isSocketLifecycleInstalled,
   isSuspended,
@@ -11,12 +11,14 @@ import {
 } from './socket-lifecycle'
 
 /** A stand-in for a real WebSocket: records close calls, fires listeners.
- *  Rejects a code Chromium would reject, so a suite cannot go green on 1001. */
-function fakeSocket() {
+ *  Rejects a code Chromium would reject, so a suite cannot go green on 1001.
+ *  Carries the URL it was constructed with — the module scopes its close by it. */
+function fakeSocket(url = 'wss://gw.example/api/ws') {
   const listeners = new Map<string, Array<() => void>>()
   const closed: Array<{ code?: number; reason?: string }> = []
   return {
     readyState: 1,
+    url,
     closed,
     close(code?: number, reason?: string) {
       if (code !== undefined && code !== 1000 && (code < 3000 || code > 4999)) {
@@ -46,8 +48,8 @@ function fakeSocket() {
 function freshWindow() {
   const created: ReturnType<typeof fakeSocket>[] = []
   const win = {
-    WebSocket: function (this: unknown) {
-      const socket = fakeSocket()
+    WebSocket: function (this: unknown, url: string) {
+      const socket = fakeSocket(url)
       created.push(socket)
       return socket
     },
@@ -65,8 +67,8 @@ describe('socket lifecycle', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    const a = new Socket('wss://example/a')
-    const b = new Socket('wss://example/b')
+    const a = new Socket('wss://gw.example/api/ws')
+    const b = new Socket('wss://gw.example/api/ws?profile=work')
     void a
     void b
     expect(created).toHaveLength(2)
@@ -77,7 +79,7 @@ describe('socket lifecycle', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    const socket = new Socket('wss://example/a') as ReturnType<typeof fakeSocket>
+    const socket = new Socket('wss://gw.example/api/ws') as ReturnType<typeof fakeSocket>
     expect(liveSocketCount()).toBe(1)
 
     // An `error` frame does not mean the socket closed. Untracking it there
@@ -90,12 +92,12 @@ describe('socket lifecycle', () => {
     expect(created).toHaveLength(1)
   })
 
-  it('closes every tracked socket when the app is backgrounded', () => {
+  it('closes the gateway socket when the app is backgrounded', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    new Socket('wss://example/a')
-    new Socket('wss://example/b')
+    new Socket('wss://gw.example/api/ws')
+    new Socket('wss://gw.example/api/ws?profile=work')
 
     setSuspended(true)
 
@@ -112,7 +114,7 @@ describe('socket lifecycle', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    new Socket('wss://example/a')
+    new Socket('wss://gw.example/api/ws')
 
     let thrown: unknown
     try {
@@ -124,7 +126,7 @@ describe('socket lifecycle', () => {
     expect((thrown as Error).name).toBe('InvalidAccessError')
     expect(created[0].readyState).toBe(1)
 
-    expect(closeAllSockets(1001, 'app backgrounded')).toBe(0)
+    expect(closeGatewaySockets(1001, 'app backgrounded')).toBe(0)
     expect(liveSocketCount()).toBe(1)
     expect(isSuspended()).toBe(false)
 
@@ -138,7 +140,7 @@ describe('socket lifecycle', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    const socket = new Socket('wss://example/a') as ReturnType<typeof fakeSocket>
+    const socket = new Socket('wss://gw.example/api/ws') as ReturnType<typeof fakeSocket>
     const realClose = socket.close.bind(socket)
     let failed = false
     socket.close = (code?: number, reason?: string) => {
@@ -166,13 +168,50 @@ describe('socket lifecycle', () => {
     installSocketLifecycle(win as never)
     setSuspended(true)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    new Socket('wss://example/again')
+    new Socket('wss://gw.example/api/ws?ticket=again')
 
     expect(created).toHaveLength(1)
     expect(created[0].readyState).toBe(3)
     expect(created[0].closed).toEqual([{ code: 1000, reason: 'app backgrounded' }])
     expect(liveSocketCount()).toBe(0)
     expect(isSuspended()).toBe(true)
+  })
+
+  it('leaves a sibling stream alone: only the gateway socket has a resume redial', () => {
+    const { win, created } = freshWindow()
+    installSocketLifecycle(win as never)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+    const gateway = new Socket('wss://gw.example/api/ws?ticket=t') as ReturnType<typeof fakeSocket>
+    // Bot Screen RFB and a plugin stream: their owners reconnect them, the
+    // wrapper does not (the RFB pane parks on "stream lost" if we close it).
+    const rfb = new Socket('wss://gw.example/api/display/ws?ticket=d') as ReturnType<typeof fakeSocket>
+    const plugin = new Socket('wss://gw.example/api/plugins/bots/events?token=x') as ReturnType<typeof fakeSocket>
+
+    setSuspended(true)
+
+    expect(gateway.closed).toEqual([{ code: 1000, reason: 'app backgrounded' }])
+    expect(rfb.closed).toHaveLength(0)
+    expect(plugin.closed).toHaveLength(0)
+    expect(rfb.readyState).toBe(1)
+    expect(plugin.readyState).toBe(1)
+    expect(created).toHaveLength(3)
+    // Siblings stay tracked (their own close still untracks them).
+    expect(liveSocketCount()).toBe(2)
+  })
+
+  it('leaves a sibling opened while already suspended open', () => {
+    const { win, created } = freshWindow()
+    installSocketLifecycle(win as never)
+    setSuspended(true)
+    const Socket = win.WebSocket as unknown as new (u: string) => unknown
+    new Socket('wss://gw.example/api/display/ws?ticket=d')
+    new Socket('wss://gw.example/api/ws?ticket=t')
+
+    expect(created).toHaveLength(2)
+    expect(created[0].closed).toHaveLength(0) // sibling: its owner decides
+    expect(created[0].readyState).toBe(1)
+    expect(created[1].closed).toEqual([{ code: 1000, reason: 'app backgrounded' }])
+    expect(liveSocketCount()).toBe(1)
   })
 
   it('does not close a resumed app\'s sockets and is idempotent on resume', () => {
@@ -182,7 +221,7 @@ describe('socket lifecycle', () => {
     setSuspended(true)
     setSuspended(false)
     setSuspended(false) // a second resume must not re-close anything
-    new Socket('wss://example/a')
+    new Socket('wss://gw.example/api/ws')
     expect(created[0].closed).toHaveLength(0)
     expect(liveSocketCount()).toBe(1)
   })
@@ -191,7 +230,7 @@ describe('socket lifecycle', () => {
     const { win, created } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    new Socket('wss://example/a')
+    new Socket('wss://gw.example/api/ws')
     expect(liveSocketCount()).toBe(1)
     created[0].emitClose()
     expect(liveSocketCount()).toBe(0)
@@ -207,7 +246,7 @@ describe('socket lifecycle', () => {
     onSocketCreated(bad)
     onSocketCreated((socket) => seen.push(socket))
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    new Socket('wss://example/a')
+    new Socket('wss://gw.example/api/ws')
     expect(bad).toHaveBeenCalledTimes(1)
     expect(seen).toHaveLength(1)
   })
@@ -219,7 +258,7 @@ describe('socket lifecycle', () => {
     const { win } = freshWindow()
     installSocketLifecycle(win as never)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    new Socket('wss://example/a')
+    new Socket('wss://gw.example/api/ws')
     expect(seen).toHaveLength(0)
   })
 
@@ -230,7 +269,7 @@ describe('socket lifecycle', () => {
     installSocketLifecycle(win as never)
     expect(win.WebSocket).toBe(first)
     const Socket = win.WebSocket as unknown as new (u: string) => unknown
-    new Socket('wss://example/a')
+    new Socket('wss://gw.example/api/ws')
     expect(created).toHaveLength(1)
   })
 
