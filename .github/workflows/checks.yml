@@ -84,14 +84,27 @@ jobs:
         run: npx patch-package && node scripts/apply-upstream-patches.mjs
       # The artefact half of the loggingBehaviour guard: `sync:android` runs
       # `cap sync` and then `scripts/check-capacitor-config.mjs`, so this job
-      # exercises the real producer path instead of a fixture. A change that
-      # removes the guard from the script, or that lets a leaking value back into
-      # `capacitor.config.ts`, goes red here — no emulator or SDK needed, `cap
-      # sync` only copies the config and web assets.
+      # exercises the real producer path instead of a fixture. A leaking value in
+      # `capacitor.config.ts` goes red here; the step below pins the OTHER half —
+      # that the script still runs the check at all, which running it cannot prove
+      # (round 18). No emulator or SDK needed: `cap sync` only copies the config
+      # and the web assets.
       - name: Build the web bundle
         run: npm run build:mobile
       - name: Sync the Android config and run the guard
         run: npm run sync:android
+      - name: sync:android still runs the guard
+        # Running `npm run sync:android` cannot notice its own wiring being removed:
+        # delete the `&& node .../check-capacitor-config.mjs` from the script and the
+        # command still exits 0 on a clean config. Assert the string.
+        run: |
+          node -e '
+            const s = require("./package.json").scripts["sync:android"]
+            if (!s.includes("check-capacitor-config.mjs")) {
+              console.error("sync:android no longer runs scripts/check-capacitor-config.mjs: " + s)
+              process.exit(1)
+            }
+          '
 
   upstream-patches:
     name: carried upstream patches

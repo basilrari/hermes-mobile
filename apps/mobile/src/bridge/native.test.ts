@@ -43,6 +43,31 @@ describe('onAppStateChange (HM-32)', () => {
     expect(seen[0]).toContain('UNIMPLEMENTED')
     // Still bounded: no message text, no stack.
     expect(seen[0]).not.toContain('not implemented on android')
+    // And the code must survive the trace's clamp: `rpc-trace` prepends
+    // `lifecycle: ` and truncates past 120 chars from the tail, where the code sits
+    // (round 18).
+    expect(`lifecycle: ${seen[0]}`.length).toBeLessThanOrEqual(120)
+    stop()
+    warn.mockRestore()
+  })
+
+  it('bounds an over-long or non-token rejection code instead of letting it truncate the note', async () => {
+    // `code` is a plugin-defined string. A long one, or one with punctuation, must
+    // not push the note past the trace's clamp (where the tail is what gets cut) and
+    // must not carry free text into the shared buffer (round 18).
+    const seen: string[] = []
+    resetLifecycleGapForTests()
+    onLifecycleGap((note) => seen.push(note))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    addListener.mockRejectedValueOnce({ code: 'A'.repeat(60) + ' secret: hunter2' })
+
+    const stop = onAppStateChange(() => {})
+    await vi.waitFor(() => expect(seen).toHaveLength(1))
+
+    expect(seen[0]).toContain('A'.repeat(24))
+    expect(seen[0]).not.toContain('A'.repeat(25))
+    expect(seen[0]).not.toContain('hunter2')
+    expect(`lifecycle: ${seen[0]}`.length).toBeLessThanOrEqual(120)
     stop()
     warn.mockRestore()
   })

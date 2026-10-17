@@ -117,11 +117,19 @@ export function onAppStateChange(callback: (active: boolean) => void): () => voi
       // Still no free-form text: no message, no stack, no URL.
       const code = (err as { code?: unknown } | null)?.code
       const reason = typeof code === 'string' && code ? code : err instanceof Error ? err.name : typeof err
-      // Two consequences now, and the note names both: the socket is not closed on
+      // Two consequences, and the note names both: the socket is not closed on
       // background, and the deferred boot reload loses its only wake-up channel
       // (`boot-reload.ts` watches this event for the gate opening, round 17).
+      //
+      // Sized to survive the trace's clamp: `rpc-trace` prepends `lifecycle: ` (11
+      // chars) and truncates past 120, and the truncation eats the TAIL — which is
+      // the reason code, the one field that says which way the control failed
+      // (round 18). The fixed part is 74 chars, so 74 + 11 + 24 = 109: even a
+      // maximal reason leaves headroom, and the charset keeps it a code-shaped
+      // token rather than free text.
+      const bounded = reason.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 24) || 'unknown'
       reportLifecycleGap(
-        `appStateChange did not register: socket stays open while hidden; boot reload has no resume wake-up (${reason})`,
+        `appStateChange did not register: no background close, no reload wake-up (${bounded})`,
       )
       return null
     },
