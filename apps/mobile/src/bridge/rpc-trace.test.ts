@@ -123,12 +123,28 @@ describe('instrumentWebSocket — the guard that params never reach the trace', 
     instrumentWebSocket(ws, trace, () => clock)
 
     ws.send(request(1, 'session.list', {}))
+    clock += 37 // the round trip must be measured, not asserted away
     ws.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', id: 1, result: [] }) })
 
     const [out, back] = trace.snapshot()
     expect(out).toMatchObject({ dir: 'out', name: 'session.list' })
-    expect(back).toMatchObject({ dir: 'in', name: 'session.list', ok: true })
-    void clock
+    expect(out.ms).toBeUndefined()
+    expect(back).toMatchObject({ dir: 'in', name: 'session.list', ok: true, ms: 37 })
+  })
+
+  it('forgets in-flight ids when the socket closes (no unbounded growth)', () => {
+    const trace = new RpcTrace()
+    const ws = fakeSocket()
+    instrumentWebSocket(ws, trace)
+    for (let i = 0; i < 5; i++) ws.send(request(i, 'session.list', {}))
+    ws.emit('close', {})
+    // A response for an id sent before the close must not be paired any more.
+    ws.emit('message', { data: JSON.stringify({ jsonrpc: '2.0', id: 0, result: [] }) })
+    const back = trace.snapshot().filter((e) => e.dir === 'in')
+    // Pin the shape first: `[].every(...)` is true, so without this the test
+    // passed even if inbound frames stopped being recorded at all. Round-2 finding.
+    expect(back.length).toBe(1)
+    expect(back.every((e) => e.ms === undefined)).toBe(true)
   })
 
   it('passes frames through untouched', () => {

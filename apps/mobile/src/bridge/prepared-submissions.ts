@@ -7,7 +7,16 @@
  * WebViews often, so a pending room send can be lost or duplicated. This module
  * implements the Electron contract (apps/desktop/electron/preload.ts) on top of
  * Capacitor Preferences, which is native storage on a device — so the journal
- * survives an app kill and never lands in `localStorage`.
+ * never lands in `localStorage` and is written to the app's own storage rather
+ * than the WebView's.
+ *
+ * DURABILITY, STATED HONESTLY (round-1 finding): Capacitor Android's
+ * `Preferences.set` ends in `SharedPreferences.Editor.apply()`, which is
+ * asynchronous to disk — it writes on a background thread and does not fsync
+ * before returning. So this is durable across app restarts and a clean kill, but
+ * it is NOT an fsync-before-ack guarantee and this module no longer claims one.
+ * A true guarantee needs `commit()`/fsync, which the plugin does not expose.
+ * The `compareAndSet` ordering property is unaffected: it is in-process.
  *
  * Contract (frozen at G0, planning/contracts/bridge-additions.md):
  *   read()                     → the whole journal as one JSON string; "{}" when
@@ -112,13 +121,16 @@ export function createPreparedSubmissions(
     update: (key, entry) =>
       serialise(async () => {
         const journal = await load()
-        if (entry === null) {
-          if (!Object.prototype.hasOwnProperty.call(journal, key)) return
-          delete journal[key]
-        } else {
-          journal[key] = entry
-        }
-        await persist(journal)
+        if (entry === null && !Object.prototype.hasOwnProperty.call(journal, key)) return
+        const next: Journal = { ...journal }
+        if (entry === null) delete next[key]
+        else next[key] = entry
+        // Persist FIRST, then adopt. Round-1 finding: assigning into the cached
+        // object before the write meant a failed persist left the cache claiming
+        // a value the device does not hold — and `read()` is what the renderer
+        // uses to decide what to re-send.
+        await persist(next)
+        cache = next
       }),
 
     compareAndSet: (key, expected, entry) =>
@@ -128,10 +140,12 @@ export function createPreparedSubmissions(
         if (current !== expected) {
           return { applied: false, current }
         }
-        if (entry === null) delete journal[key]
-        else journal[key] = entry
-        await persist(journal)
-        return { applied: true, current: currentOf(journal, key) }
+        const next: Journal = { ...journal }
+        if (entry === null) delete next[key]
+        else next[key] = entry
+        await persist(next)
+        cache = next
+        return { applied: true, current: currentOf(next, key) }
       }),
   }
 }

@@ -10,7 +10,7 @@
     "apps/mobile"
   ],
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && node scripts/apply-upstream-patches.mjs",
     "build:mobile": "npm run build --workspace apps/mobile",
     "sync:android": "cd apps/mobile && npx cap sync android",
     "apk:debug": "npm run build:mobile && npm run sync:android && cd apps/mobile/android && ./gradlew assembleDebug",
@@ -19,7 +19,9 @@
   },
   "devDependencies": {
     "patch-package": "^8.0.0",
-    "typescript": "6.0.3"
+    "playwright": "^1.62.1",
+    "typescript": "6.0.3",
+    "ws": "^8.21.1"
   },
   "engines": {
     "node": ">=22.0.0"

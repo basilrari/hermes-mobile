@@ -17,22 +17,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 70
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # No actions/checkout and no setup-python: this job needs only curl and
+      # python3, which the runner image already has. Keeps third-party actions —
+      # and their floating tags — off the merge-control path. Round-1 finding.
       - name: Check for APPROVE verdict in review comments
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Only the account that reviews this repo may write a verdict.
+          VERDICT_AUTHOR: basilrari
         run: |
           set -euo pipefail
           WAIT_S=3600
           INTERVAL_S=20
+          MAX_FETCH_ATTEMPTS=3
           fetch() {
             url="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100"
-            python -c 'import json; json.dump([], open("reviews.json", "w"))'
+            python3 -c 'import json; json.dump([], open("reviews.json", "w"))'
             pages=0
             while [ -n "$url" ]; do
               pages=$((pages + 1))
@@ -42,12 +44,36 @@ jobs:
               fi
               hdr=$(mktemp)
               body=$(mktemp)
-              curl -sS -f -D "$hdr" -o "$body" \
-                -H "Authorization: Bearer ${GH_TOKEN}" \
-                -H "User-Agent: github-workflow-standard" \
-                -H "Accept: application/vnd.github+json" \
-                "$url"
-              python -c '
+              attempt=1
+              # A transient 5xx/429/timeout must not kill a 60-minute wait that
+              # may already hold a valid APPROVE. Retry those; fail at once on
+              # 401/403 so a broken token is loud instead of silently anonymous.
+              while :; do
+                if curl -sS -f -D "$hdr" -o "$body" -w '%{http_code}' \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "User-Agent: github-workflow-standard" \
+                  -H "Accept: application/vnd.github+json" \
+                  "$url" > "$body.code" 2>"$body.err"; then
+                  break
+                fi
+                code=$(cat "$body.code" 2>/dev/null || echo 000)
+                case "$code" in
+                  401|403)
+                    echo "review-gate FAIL: GitHub rejected the token (HTTP $code); the gate cannot read reviews."
+                    cat "$body.err" >&2 || true
+                    exit 1
+                    ;;
+                esac
+                if [ "$attempt" -ge "$MAX_FETCH_ATTEMPTS" ]; then
+                  echo "review-gate: fetch failed after ${attempt} attempt(s) (HTTP $code)"
+                  cat "$body.err" >&2 || true
+                  exit 1
+                fi
+                echo "review-gate: transient fetch failure (HTTP $code); retry ${attempt}/${MAX_FETCH_ATTEMPTS}"
+                attempt=$((attempt + 1))
+                sleep 5
+              done
+              python3 -c '
           import json, sys
           acc = json.load(open("reviews.json"))
           page = json.load(open(sys.argv[1]))
@@ -56,7 +82,7 @@ jobs:
           acc.extend(page)
           json.dump(acc, open("reviews.json", "w"))
           ' "$body"
-              url=$(python -c '
+              url=$(python3 -c '
           import sys
           next_url = ""
           for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
@@ -71,14 +97,15 @@ jobs:
                       next_url = part[start + 1:end].strip()
           print(next_url)
           ' "$hdr") || exit 1
-              rm -f "$hdr" "$body"
+              rm -f "$hdr" "$body" "$body.code" "$body.err"
             done
             echo "review-gate: fetched ${pages} review page(s)"
           }
           decide() {
-            python -c '
+            python3 -c '
           import json, os, sys
           head = os.environ.get("HEAD_SHA", "")
+          author = os.environ.get("VERDICT_AUTHOR", "")
           reviews = json.load(open("reviews.json"))
           verdicts = []
           kept = ("COMMENTED", "APPROVED", "CHANGES_REQUESTED")
@@ -86,6 +113,8 @@ jobs:
               if head and rv.get("commit_id") != head:
                   continue
               if (rv.get("state") or "") not in kept:
+                  continue
+              if author and ((rv.get("user") or {}).get("login") or "") != author:
                   continue
               body = (rv.get("body") or "").upper()
               for line in body.splitlines():

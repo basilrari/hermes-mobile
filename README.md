@@ -13,8 +13,8 @@ Taking over the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).
 
 > Status: M0 in progress. Unofficial, Android-only, HTTPS-only, app ID `io.github.basilrari.hermesmobile`, debug builds only.
 >
-> **v0.1.1**: the Desktop renderer is synced to upstream `hermes-agent` main
-> (`7bda2a33`), so **Bot Mode** (the *Bots* tab next to *Sessions*) is included and works
+> **v0.1.1**: the Desktop renderer is pinned to upstream `hermes-agent` main
+> (`450ad5055e`), so **Bot Mode** (the *Bots* tab next to *Sessions*) is included and works
 > against a remote gateway. On tablets the left sidebar stays docked like the desktop app;
 > on phones it opens as an edge overlay from the titlebar toggle.
 
@@ -23,7 +23,7 @@ Taking over the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).
 | Path | What it is |
 |---|---|
 | `apps/mobile` | The Capacitor app: bridge, connect/login screens, Android project |
-| `apps/desktop` | Upstream Desktop renderer source (hermes-agent main `7bda2a33`), reused as-is through the `@/` alias (Electron main is not built) |
+| `apps/desktop` | Upstream Desktop renderer source (hermes-agent main `450ad5055e`), reused as-is through the `@/` alias (Electron main is not built) |
 | `apps/shared` | Upstream shared gateway client (`@hermes/shared`) |
 | `patches/` | `patch-package` fix for `@capacitor-community/safe-area` (IME double padding) |
 | `docs/ARCHITECTURE.md` | How the pieces fit together |
@@ -45,6 +45,7 @@ Requirements: Node 22+, JDK 21, and the Android SDK (platform 36 and build-tools
 ```bash
 npm ci --ignore-scripts        # lockfile is upstream's, so the renderer gets the exact dep versions it was tested with; skips Electron/node-pty native builds the mobile app doesn't need
 npx patch-package              # applies patches/ (normally run by postinstall)
+node scripts/apply-upstream-patches.mjs   # applies patches/upstream (the other half of postinstall)
 cd apps/mobile
 npm run build                  # vite → apps/mobile/dist
 npx cap sync android           # Capacitor CLI needs Node 22+

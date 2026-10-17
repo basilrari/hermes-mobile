@@ -21,6 +21,9 @@ export function TraceBadge() {
   const enabled = traceEnabled()
   const [note, setNote] = useState<string | null>(null)
   const timer = useRef<number | null>(null)
+  // Round-1 finding: the click that ends a long-press also fired onClick and
+  // clobbered the share result note. Remember that the press was long.
+  const longPressFired = useRef(false)
 
   const cancel = () => {
     if (timer.current !== null) {
@@ -50,15 +53,23 @@ export function TraceBadge() {
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={() => {
         cancel()
+        longPressFired.current = false
         timer.current = window.setTimeout(() => {
           timer.current = null
+          longPressFired.current = true
           void shareTrace()
         }, LONG_PRESS_MS)
       }}
       onPointerUp={cancel}
       onPointerLeave={cancel}
       onPointerCancel={cancel}
-      onClick={() => setNote(`${rpcTrace.size} entries`)}
+      onClick={() => {
+        if (longPressFired.current) {
+          longPressFired.current = false
+          return
+        }
+        setNote(`${rpcTrace.size} entries`)
+      }}
     >
       Hermes v{__HERMES_APP_VERSION__}
       {note ? ` · ${note}` : ''}
