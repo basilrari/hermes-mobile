@@ -7,10 +7,14 @@
  * code evaluates (some of it reads the bridge at module top-level).
  */
 import { installBridge } from './install-bridge'
+import { installSocketLifecycle } from './socket-lifecycle'
 import { installRpcTrace } from './rpc-trace'
 
 // Wrap globalThis.WebSocket BEFORE any vendored module can open a socket, so
 // every JSON-RPC frame the renderer sends or receives is traced (HM-05).
+// The socket registry must wrap WebSocket BEFORE anything opens one, and it runs
+// whether or not tracing is enabled — the trace then instruments through it.
+installSocketLifecycle()
 installRpcTrace()
 
 installBridge()

@@ -12,6 +12,7 @@ import type { HermesConnection } from '@/global'
 
 import { mintWsTicket } from './auth'
 import { buildGatewayWsUrl, buildGatewayWsUrlWithTicket } from './connection-config'
+import { clearDialSuppressed, isSuspended, noteDialSuppressed } from './socket-lifecycle'
 import { awaitTarget } from './state'
 
 function requireTarget() {
@@ -36,9 +37,51 @@ export function mobileConnectionId(baseUrl: string): string {
   return `mobile-${host.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
 }
 
+/**
+ * Thrown while the app is backgrounded (HM-32). The gate lives in the shared
+ * resolver (`getGatewayWsUrl`), so every caller that resolves a connection sees
+ * it — including the non-dialing ones (`getConnectionFor`, the connect screen).
+ * The type exists so those callers can tell "not while hidden" from a real
+ * transport failure; none of them branch on it today. `store/profile.ts` falls
+ * back to the descriptor it already holds. `api/plugins.ts` holds none: its
+ * `activeConnection()` catch resolves null, `pluginSocket` returns before it
+ * creates a socket and before it wires `onclose`, so that reconnect loop stops
+ * rather than re-dialing and the pane keeps its polling fallback. Either way
+ * nothing resolves a fresh dial target in the background, and nothing reports
+ * it as an outage.
+ */
+export class GatewayDialSuppressed extends Error {
+  constructor() {
+    super('app backgrounded: gateway dial suppressed')
+    this.name = 'GatewayDialSuppressed'
+  }
+}
+
 /** Build the WS URL the gateway client connects with. OAuth/password gateways
  *  mint a fresh ticket; token gateways embed the long-lived token. */
 export async function getGatewayWsUrl(): Promise<string> {
+  // HM-32: the renderer redials on close (`scheduleReconnect` in the vendored
+  // boot hook), so closing the socket on backgrounding would re-mint a ticket
+  // and dial every ≤15s for the whole hidden window — more background traffic
+  // than leaving the socket open, the opposite of why it is closed.
+  // Failing here is the mobile-owned gate (no vendored patch): the ladder gets
+  // no ticket and no URL, so it cannot dial. Nothing in this file clears the
+  // flag — `mobile-behaviors.tsx` owns `appStateChange` and calls
+  // `setSuspended(false)` on resume and on mount (never on unmount: that happens
+  // in the background), after which the next attempt resolves normally. The 3 ms
+  // from resume to a redial (round-4 measurement) belongs to the dial that follows
+  // the flag clear, not to the clear itself — the flag moves on `appStateChange`,
+  // the WebView's `visibilitychange` is a different edge.
+  // The refusal is recorded as well as thrown: this is the only place that knows
+  // the dial was suppressed, and the boot hook's retry decision only sees the
+  // failure (`getBootProgress().retryable` in stubs.ts).
+  if (isSuspended()) {
+    noteDialSuppressed()
+    throw new GatewayDialSuppressed()
+  }
+  // A dial that got past the gate clears the mark, so it describes the LAST
+  // attempt rather than any refusal the boot hook might still be looking at.
+  clearDialSuppressed()
   const target = await requireTarget()
   if (target.authMode === 'oauth') {
     const ticket = await mintWsTicket(target.baseUrl)

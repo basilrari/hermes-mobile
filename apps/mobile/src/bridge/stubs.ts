@@ -9,10 +9,13 @@
  * methods return a real unsubscribe.
  */
 
+import { dialSuppressedRecently } from './socket-lifecycle'
+
 const noopUnsub = (): void => {}
 
-// A tiny "already booted, nothing to do" progress object.
-const readyBoot = {
+// A tiny "already booted, nothing to do" progress object. `retryable` is optional
+// so the gate branch below keeps the same shape (see getBootProgress).
+const readyBoot: { retryable?: boolean } & Record<string, unknown> = {
   error: null,
   fakeMode: false,
   message: 'Connected',
@@ -36,7 +39,28 @@ export function makeStubs() {
     openNewSessionWindow: async () => unsupportedWindow,
 
     // Boot / bootstrap: there is no local backend to install on a phone.
-    getBootProgress: async () => readyBoot,
+    // `retryable` is what `bootFailureIsRetryable` reads (use-gateway-boot.ts).
+    // A boot dial refused by the HM-32 gate is transient, so the boot takes the
+    // hook's retry loop instead of failing with a sticky "Hermes couldn't start"
+    // toast whose detail line is the internal suppression string.
+    //
+    // Cause, not time: `isSuspended()` answers for the whole hidden window, so it
+    // would also make a genuine 401 during a backgrounded boot look transient —
+    // the one class the hook reserves for remote faults. The gate records its own
+    // refusal (connection.ts → noteDialSuppressed), and only a refusal fresh
+    // enough to belong to this failure counts.
+    //
+    // Reach, honestly: that loop is 5 attempts at full jitter with ceilings
+    // 2/4/8/15/15 s, so it bridges ~22 s typically and 44 s worst case. A phone
+    // left hidden longer still reaches `failDesktopBoot` while it is hidden;
+    // BootAutoRetry (`mobile/boot-auto-retry.tsx`) then holds the reload until the
+    // screen is back (`boot-reload.ts`), and after 60 s hidden drops its
+    // "Reconnecting…" cover so
+    // the manual failure screen is reachable — without reloading blind, because a
+    // reload starts a fresh bridge with the gate `false` and would dial.
+    // Widening the budget itself would need a vendored patch.
+    // Left `undefined` (the previous value) for every other failure.
+    getBootProgress: async () => (dialSuppressedRecently() ? { ...readyBoot, retryable: true } : readyBoot),
     onBootProgress: () => noopUnsub,
     getBootstrapState: async () => ({
       active: false,

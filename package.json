@@ -12,7 +12,7 @@
   "scripts": {
     "postinstall": "patch-package && node scripts/apply-upstream-patches.mjs",
     "build:mobile": "npm run build --workspace apps/mobile",
-    "sync:android": "cd apps/mobile && npx cap sync android",
+    "sync:android": "cd apps/mobile && npx cap sync android && node ../../scripts/check-capacitor-config.mjs",
     "apk:debug": "npm run build:mobile && npm run sync:android && cd apps/mobile/android && ./gradlew assembleDebug",
     "e2e": "npm run build:mobile && node scripts/e2e/run.mjs",
     "e2e:only": "node scripts/e2e/run.mjs"

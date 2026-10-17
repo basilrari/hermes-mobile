@@ -4,7 +4,13 @@ import { useEffect } from 'react'
 import { useLocation } from 'react-router'
 
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
+import { translateNow } from '@/i18n'
 import { $panesFlipped } from '@/store/layout'
+import { $notifications, dismissNotification } from '@/store/notifications'
+import { onAppStateChange } from '~bridge/native'
+import { isGatewayWsUrl } from '~bridge/connection-config'
+import { onSocketCreated, setSuspended, type SocketLike } from '~bridge/socket-lifecycle'
+import { staleConnectionLostIds } from '~bridge/stale-alerts'
 
 /**
  * MobileBehaviors — the touch adaptations layered over the reused desktop UI.
@@ -104,10 +110,87 @@ export function MobileBehaviors() {
       })
       .catch(() => {})
 
+    // HM-32: close the gateway socket when the app leaves the screen, and close
+    // one the renderer opens while it is still hidden. Resume only clears the flag.
+    //
+    // The flag is a module global, and this effect owns the only `appStateChange`
+    // listener that clears it. A 401 while hidden unmounts this component
+    // (http.ts → requireReauth → app.tsx leaves the connected tree) and the
+    // plugin does not replay `isActive: true` to the listener the next login
+    // mounts, so a stale `true` would gate every dial on a visible app. Clear it on
+    // MOUNT only: that is what a remount while active needs, and it is the clear
+    // that closes the stuck-flag failure. Clearing on unmount too would open the
+    // gate on a phone that is still hidden — the 401 path unmounts this component
+    // in the background, and the resolver outlives it (`store/profile.ts`,
+    // `api/plugins.ts`, `store/gateway.ts` all reach `getConnectionFor`), so a dial
+    // there would mint a ticket behind a screen nobody is looking at. The two
+    // headers that promise "no socket stays open while hidden, including on the
+    // failure path" (`socket-lifecycle.ts`, `connection.ts`) are unconditional, and
+    // an unmount clear contradicts them (round 14).
+    setSuspended(false)
+    //
+    // While hidden, every ladder step is a failed attempt (the gate in
+    // connection.ts), so the vendored boot hook's 300 s escalation raises a
+    // "Hermes lost its connection" toast with `durationMs: 0` — no timer, and
+    // nothing on the reconnect path dismisses it. So: on the next socket OPEN,
+    // drop the connection-lost alerts that were raised at or after this
+    // background edge, then forget the edge (one shot per hidden window). Not on
+    // resume: coming back on screen does not prove the gateway is reachable, and a
+    // remaining toast is the only actionable thing ("Reconnect now") a user has
+    // while the gateway is still down. Resume only clears the suspend flag.
+    let hiddenAtMs = 0
+    // The `open` listeners this mount attaches, so the cleanup can take them off
+    // again. `removeOpenWatch()` only drops the observer: a socket it already saw
+    // keeps the listener, and that closure holds the URL (which may carry
+    // `?token=`) and can still write to the store from a dead mount (round 26 S2).
+    const boundOpenListeners: { socket: SocketLike; onOpen: () => void }[] = []
+    const dismissHiddenToasts = (): void => {
+      if (hiddenAtMs === 0) return
+      const title = translateNow('boot.errors.gatewayConnectionLost')
+      for (const id of staleConnectionLostIds($notifications.get(), title, hiddenAtMs)) {
+        dismissNotification(id)
+      }
+      // One shot per hidden window. Without this the timestamp outlives its
+      // window and the rule silently means "any alert since the first background",
+      // which is not what `stale-alerts.ts` documents (round 8).
+      hiddenAtMs = 0
+    }
+
+    const removeAppState = onAppStateChange((active) => {
+      setSuspended(!active)
+      if (!active) hiddenAtMs = Date.now()
+    })
+
+    // A GATEWAY socket that opens is proof the connection is fine, so any
+    // connection-lost toast raised while we were hidden is stale by definition.
+    // Scoped two ways on purpose: only the gateway route counts — sibling sockets
+    // (plugin streams, dictation, Bot Screen RFB) open beside it on other paths and
+    // their `open` is not evidence about the gateway (`isGatewayWsUrl`) — and only
+    // the window the app was hidden for, so a toast raised on a visible app is left
+    // alone. The observer sees every socket the wrapper builds, hence the check.
+    const removeOpenWatch = onSocketCreated((socket, url) => {
+      const onOpen = (): void => {
+        // `url` is the one the wrapper constructed the socket with — the same
+        // value the close rule uses. `SocketLike` does not declare `url` at all
+        // any more (rounds 23-25), so reading it here would leave the dismissal
+        // blind to exactly the shape the close handles (round 24 S1).
+        if (isGatewayWsUrl(url)) dismissHiddenToasts()
+      }
+      socket.addEventListener('open', onOpen)
+      boundOpenListeners.push({ socket, onOpen })
+    })
+
     return () => {
       observer.disconnect()
       document.removeEventListener('pointerdown', onPointerDown, true)
       backHandle?.remove()
+      removeAppState()
+      removeOpenWatch()
+      for (const { socket, onOpen } of boundOpenListeners) socket.removeEventListener('open', onOpen)
+      boundOpenListeners.length = 0
+      // Deliberately no `setSuspended(false)` here — see the mount comment. The
+      // next mount clears the flag, and until then the gate stays closed while the
+      // app is hidden.
       void kbShow.then((h) => h?.remove())
       void kbHide.then((h) => h?.remove())
       document.documentElement.removeAttribute('data-drawer-open')

@@ -12,10 +12,14 @@
  * The headless harness reads `window.__hermesRpcTrace`; on the tablet a
  * long-press on the version badge shares the same text (TraceBadge.tsx).
  *
- * Enabled by default in debug builds. A release build is produced with
- * `VITE_HERMES_TRACE=false`, which leaves the whole module inert (no buffer, no
- * WebSocket wrap, no global).
+ * Enabled by default. `VITE_HERMES_TRACE=false` leaves the whole module inert
+ * (no buffer, no WebSocket wrap, no global); that is the documented release knob,
+ * and nothing in this repo sets it, so a plain `vite build` ships the trace. The
+ * socket-lifecycle control must therefore work whether or not the trace is on.
  */
+
+import { onLifecycleGap } from './lifecycle-gap'
+import { isSocketLifecycleInstalled, onSocketCreated, type SocketLike } from './socket-lifecycle'
 
 export type TraceDirection = 'in' | 'out' | 'rest'
 
@@ -184,6 +188,14 @@ export interface WebSocketLike {
  * Only names leave this function — params are never read.
  */
 export function instrumentWebSocket(ws: WebSocketLike, trace: RpcTrace, now: () => number = Date.now): void {
+  // Two paths can reach the same socket (the WebSocket wrapper, and the
+  // socket-lifecycle observer). A second instrument would bind the ALREADY
+  // wrapped `send` and record every frame through both, so mark the socket.
+  // (`__hermesTraced` on the CONSTRUCTOR is installRpcTrace's own wrap guard —
+  // this marker is per socket, not per window.)
+  const marked = ws as unknown as { __hermesSocketTraced?: boolean }
+  if (marked.__hermesSocketTraced) return
+
   const pending = new Map<string | number, { name: string; t: number }>()
   const originalSend = ws.send.bind(ws)
 
@@ -200,6 +212,9 @@ export function instrumentWebSocket(ws: WebSocketLike, trace: RpcTrace, now: () 
     }
     originalSend(data)
   }
+  // Set before the listeners: `send` is what would double-record, and a throw
+  // from `addEventListener` below must not leave it looking un-instrumented.
+  marked.__hermesSocketTraced = true
 
   ws.addEventListener('message', (event) => {
     const text = frameText(event?.data)
@@ -257,6 +272,18 @@ interface TraceableWebSocket {
 }
 
 /**
+ * Stable observer reference. `observers` is a Set, so registering this function
+ * twice is a no-op — a repeated install cannot double-instrument a socket.
+ */
+const instrumentObserver = (socket: SocketLike): void => {
+  try {
+    instrumentWebSocket(socket as unknown as WebSocketLike, rpcTrace)
+  } catch {
+    /* tracing must never break the app */
+  }
+}
+
+/**
  * Wrap `globalThis.WebSocket` so every socket the vendored renderer opens is
  * traced, and publish `window.__hermesRpcTrace`. Idempotent. No-op when the
  * trace is disabled. Must run before any socket is created (boot.ts).
@@ -265,8 +292,16 @@ export function installRpcTrace(win: TraceWindow = globalThis as unknown as Trac
   if (!traceEnabled()) return null
   if (win.__hermesRpcTraceInstalled) return rpcTrace
 
+  // The socket-lifecycle module wraps WebSocket unconditionally (it has to work
+  // when tracing is off), so when it is installed we instrument through its
+  // observer hook instead of wrapping a second time: a second wrapper would put
+  // two instrumenters on one socket, and the trace would record every frame
+  // twice. (Wrapping twice around ONLY the trace wrapper is harmless — that
+  // was the earlier claim here, and it was wrong about the hazard.) Round: HM-32.
   const Original = win.WebSocket
-  if (typeof Original === 'function' && !(Original as { __hermesTraced?: boolean }).__hermesTraced) {
+  if (isSocketLifecycleInstalled(win)) {
+    onSocketCreated(instrumentObserver)
+  } else if (typeof Original === 'function' && !(Original as { __hermesTraced?: boolean }).__hermesTraced) {
     const Wrapped = function (this: unknown, url: string, protocols?: string | string[]): WebSocketLike {
       const socket =
         protocols === undefined
@@ -293,6 +328,11 @@ export function installRpcTrace(win: TraceWindow = globalThis as unknown as Trac
     clear: () => rpcTrace.clear(),
     size: () => rpcTrace.size,
   }
+  // A control that could not install itself leaves no other trace of the fact
+  // (lifecycle-gap.ts). The note is metadata only, like every other entry, and
+  // it is readable on-device where `console.*` is not on a release build.
+  onLifecycleGap((message) => rpcTrace.record({ dir: 'rest', name: `lifecycle: ${message}`, ok: false }))
+
   win.__hermesRpcTraceInstalled = true
   return rpcTrace
 }
