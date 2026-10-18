@@ -114,7 +114,13 @@ function safeName(name: string): string {
 /** Strip a query string (may carry `?token=`/`?ticket=`) and any userinfo. */
 export function safeRestPath(path: string): string {
   const noQuery = path.split(/[?#]/, 1)[0] ?? path
-  return safeName(noQuery || '/')
+  // The doc line above promises userinfo is gone, so reduce an absolute (or
+  // protocol-relative) URL to its path: `https://user:tok@host/api/x` must record
+  // `/api/x`, or the credential lands in the badge's share text. Callers normally
+  // pass a relative path, but `rawRequest({path})` is exported and `api()` forwards
+  // it verbatim when no profile scope is set.
+  const noOrigin = noQuery.replace(/^(?:[a-z][a-z0-9+.-]*:)?\/\/[^/]*/i, '')
+  return safeName(noOrigin || '/')
 }
 
 export class RpcTrace {
