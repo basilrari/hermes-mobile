@@ -164,6 +164,11 @@ describe('safeRestPath', () => {
     expect(safeRestPath('/api/ws?ticket=abc&x=1')).toBe('/api/ws')
     expect(safeRestPath('/api/x#frag')).toBe('/api/x')
     expect(safeRestPath('')).toBe('/')
+    // An absolute URL must not carry its origin or userinfo into the trace: the
+    // function's contract says userinfo is stripped, and `rawRequest` can pass one.
+    expect(safeRestPath('https://user:tok@host/api/x')).toBe('/api/x')
+    expect(safeRestPath('wss://host/socket?ticket=abc')).toBe('/socket')
+    expect(safeRestPath('//user:tok@host/api/y')).toBe('/api/y')
   })
 })
 
