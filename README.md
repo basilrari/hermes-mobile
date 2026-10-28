@@ -11,19 +11,21 @@ by [@Bentlybro](https://github.com/Bentlybro). See [LICENSE](LICENSE) for MIT te
 
 Taking over the project? Start with [docs/HANDOFF.md](docs/HANDOFF.md).
 
-> Status: M0 in progress. Unofficial, Android-only, HTTPS-only, app ID `io.github.basilrari.hermesmobile`, debug builds only.
+> Status: preparing **v0.2.0-debug**. Unofficial, Android-only, HTTPS-only, app ID `io.github.basilrari.hermesmobile`, debug builds only. No GitHub release is published from this branch.
 >
-> **v0.1.1**: the Desktop renderer is pinned to upstream `hermes-agent` main
-> (`450ad5055e`), so **Bot Mode** (the *Bots* tab next to *Sessions*) is included and works
-> against a remote gateway. On tablets the left sidebar stays docked like the desktop app;
-> on phones it opens as an edge overlay from the titlebar toggle.
+> **v0.2.0** (`versionCode` 3): the Desktop renderer is the upstream **stable tag**
+> [`v0.22.5`](https://github.com/NousResearch/hermes-agent/releases/tag/v0.22.5)
+> (tag object `56b6a31f`, release commit `bf0203a7`), not `main`. **Bot Mode**
+> (the *Bots* tab next to *Sessions*) is included. On tablets the left sidebar
+> stays docked like the desktop app; on phones it opens as an edge overlay from
+> the titlebar toggle.
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
 | `apps/mobile` | The Capacitor app: bridge, connect/login screens, Android project |
-| `apps/desktop` | Upstream Desktop renderer source (hermes-agent main `450ad5055e`), reused as-is through the `@/` alias (Electron main is not built) |
+| `apps/desktop` | Upstream Desktop renderer source (hermes-agent tag `v0.22.5`, commit `bf0203a7`), reused as-is through the `@/` alias (Electron main is not built) |
 | `apps/shared` | Upstream shared gateway client (`@hermes/shared`) |
 | `patches/` | `patch-package` fix for `@capacitor-community/safe-area` (IME double padding) |
 | `docs/ARCHITECTURE.md` | How the pieces fit together |

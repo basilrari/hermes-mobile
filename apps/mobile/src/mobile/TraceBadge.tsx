@@ -1,7 +1,10 @@
 /**
  * TraceBadge.tsx — the debug RPC-trace affordance (HM-05).
  *
- * A small "Hermes v<version>" label, pinned to a corner. Long-press (600 ms)
+ * A small "Hermes v<version>" label, pinned under the titlebar on the right.
+ * It used to sit at the bottom-left with z-index 2000, which covered the
+ * phone sidebar toggle and the open drawer's bottom row. It stays under the
+ * titlebar (z-70) and under dialogs. Long-press (600 ms)
  * exports the RPC trace as a text file and opens the native share sheet, so on
  * the tablet Basil can produce a trace when a checklist item fails without
  * adb. A short tap shows the current entry count.
@@ -47,9 +50,10 @@ export function TraceBadge() {
   return (
     <button
       type="button"
+      data-hermes-trace=""
       aria-label="Hermes debug trace (long-press to share)"
       title="Long-press to share the RPC trace"
-      className="fixed bottom-2 left-2 z-[2000] rounded-md bg-black/40 px-2 py-1 text-[10px] leading-none text-white/70 backdrop-blur"
+      className="fixed right-2 z-40 inline-flex min-h-6 min-w-6 max-w-36 items-center truncate rounded-md bg-black/40 px-2 py-1 text-[10px] leading-none text-white/70 backdrop-blur top-[calc(env(safe-area-inset-top,0px)+var(--titlebar-height,2.125rem)+0.5rem)]"
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={() => {
         cancel()

@@ -434,28 +434,42 @@ export function ChatRuntimeBoundary({
     [expandWindow, olderAvailable, revealRow, returnToLatest, currentMessages, isHistorical, newerAvailable]
   )
 
-  const runtime = useIncrementalExternalStoreRuntime<ThreadMessage>({
-    messageRepository: runtimeMessageRepository,
-    isRunning: !isHistorical && busy,
-    isDisabled: isHistorical,
-    setMessages: isHistorical ? undefined : onThreadMessagesChange,
-    onNew: async () => {
-      // Submission is handled explicitly by ChatBar.
-      // Keeping this no-op avoids duplicate prompt.submit calls.
-    },
-    // Editing stays AVAILABLE on a history page. `isDisabled` above blocks
-    // submit/reload/branch and keeps the page static, but the rail jump is
-    // the only way into that page and it has no in-thread exit — so dropping
-    // `onEdit` left the inline composer unopenable after ANY far rail jump
-    // (the throw "Runtime does not support editing", infectious downward,
-    // healed only by the floating jump button's returnToLatest). `editMessage`
-    // already resolves its target against the live session store
-    // (use-prompt-actions), never the display page, so the edit is correct;
-    // sending one rewinds the live transcript and drops the page.
-    onEdit,
-    onCancel: isHistorical ? undefined : async () => onCancel(),
-    onReload: isHistorical ? undefined : onReload
-  })
+  // A fresh object literal here re-runs the runtime's setAdapter effect on
+  // every render. That notifies subscribers, which re-render this boundary,
+  // which builds another literal — assistant-ui then hits "Maximum update
+  // depth exceeded" and the workspace error boundary replaces the chat.
+  // Phone portrait loses the reply and Bot Chat when that lands during the
+  // click. Memoize so the effect runs only when the transcript or the
+  // callbacks actually change.
+  const noopNew = useCallback(async () => {
+    // Submission is handled explicitly by ChatBar.
+  }, [])
+  const handleCancel = useCallback(async () => {
+    await onCancel()
+  }, [onCancel])
+  const adapter = useMemo(
+    () => ({
+      messageRepository: runtimeMessageRepository,
+      isRunning: !isHistorical && busy,
+      isDisabled: isHistorical,
+      setMessages: isHistorical ? undefined : onThreadMessagesChange,
+      onNew: noopNew,
+      onEdit,
+      onCancel: isHistorical ? undefined : handleCancel,
+      onReload: isHistorical ? undefined : onReload
+    }),
+    [
+      runtimeMessageRepository,
+      isHistorical,
+      busy,
+      onThreadMessagesChange,
+      noopNew,
+      onEdit,
+      handleCancel,
+      onReload
+    ]
+  )
+  const runtime = useIncrementalExternalStoreRuntime<ThreadMessage>(adapter)
 
   return (
     <ComposerScopeProvider value={composerScope}>

@@ -3,7 +3,7 @@ import type { ExportedMessageRepository, ThreadMessage } from '@assistant-ui/rea
 import { useMemo, useRef } from 'react'
 
 import type { ChatMessage } from '@/lib/chat-messages'
-import { withUniqueToolCallIdsWithinMessage } from '@/lib/chat-messages'
+import { chatMessageText, withUniqueToolCallIdsWithinMessage } from '@/lib/chat-messages'
 import { coalesceToolOnlyAssistants, createToolMergeCache, toRuntimeMessage } from '@/lib/chat-runtime'
 
 // The exact fallback status ExportedMessageRepository.fromBranchableArray uses.
@@ -26,6 +26,7 @@ const FALLBACK_STATUS = getAutoStatus(false, false, false, false, undefined)
  */
 export function useRuntimeMessageRepository(messages: ChatMessage[]): ExportedMessageRepository {
   const cacheRef = useRef(new WeakMap<ChatMessage, ThreadMessage>())
+  const bySignature = useRef(new Map<string, ThreadMessage>())
   const toolMergeCacheRef = useRef(createToolMergeCache())
 
   return useMemo(() => {
@@ -64,13 +65,19 @@ export function useRuntimeMessageRepository(messages: ChatMessage[]): ExportedMe
       // identity when clean, so the cache below is unaffected in the common case.
       const deduped = withUniqueToolCallIdsWithinMessage(message)
 
-      const cachedMessage = cacheRef.current.get(message)
+      // The session store republishes the transcript as new objects with the
+      // same text. Keying the cache only by object identity then minted a new
+      // ThreadMessage every publish, and assistant-ui's snapshot compare
+      // looped until the workspace pane was replaced by its error boundary.
+      const signature = `${deduped.id}\0${deduped.role}\0${chatMessageText(deduped)}`
+      const cachedMessage = cacheRef.current.get(message) ?? bySignature.current.get(signature)
 
       const runtimeMessage =
         cachedMessage ?? fromThreadMessageLike(toRuntimeMessage(deduped), message.id, FALLBACK_STATUS)
 
       if (!cachedMessage) {
         cacheRef.current.set(message, runtimeMessage)
+        bySignature.current.set(signature, runtimeMessage)
       }
 
       items.push({ message: runtimeMessage, parentId })

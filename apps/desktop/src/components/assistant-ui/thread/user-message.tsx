@@ -318,8 +318,10 @@ export const UserMessage: FC<{
   const { t } = useI18n()
   const copy = t.assistant.thread
   const messageId = useAuiState(s => s.message.id)
-  const content = useAuiState(s => s.message.content)
-  const messageText = messageContentText(content)
+  // The text, not the content array. The array is a fresh snapshot on some
+  // runtime reads, and useAuiState then loops ("getSnapshot should be cached")
+  // until the workspace error boundary replaces the transcript.
+  const messageText = useAuiState(s => messageContentText(s.message.content))
   const threadRunning = useAuiState(s => s.thread.isRunning)
 
   const latestUserId = useAuiState(s => {

@@ -13,7 +13,11 @@
  *   2. an `http://` gateway URL is refused (HTTPS only)
  *   3. token login → the renderer reaches the Sessions / Bots shell
  *   4. the RPC trace (HM-05) is live and shows no `bot_relay.*` call
+ *   5. sessions list, resume, and (where the pane stays docked) Bot Mode
  * plus one two-concurrent-client pass (sync tests build on it).
+ *
+ * The mock is HTTPS with a self-signed localhost cert. It is not a
+ * `hermes dashboard` process. The chat turn is a mock model reply.
  *
  * Target: by default a local mock gateway (no secret, CI-safe). Point it at the
  * real box with:
@@ -32,7 +36,7 @@ import { fileURLToPath } from 'node:url'
 
 import { chromium } from 'playwright'
 
-import { startMockGateway } from './mock-gateway.mjs'
+import { MOCK_REPLY, startMockGateway } from './mock-gateway.mjs'
 import { classifyStorageKey, isConversationState } from './storage-rules.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -503,9 +507,178 @@ async function runProfile(browser, profile, origin, gatewayUrl, token) {
     )
     const unknown = [...localKeys, ...sessionKeys].filter((key) => !classifyStorageKey(key).known)
     if (unknown.length > 0) console.log(`    ! ${profile.name}: unclassified storage key(s): ${unknown.join(', ')}`)
+
+    await releaseFlows(page, profile)
   } finally {
     await context.close()
   }
+}
+
+/** The phone keeps a hidden docked tab and a visible overlay tab. Click the one on screen. */
+async function visibleTab(page, name) {
+  const tabs = page.getByRole('tab', { name: new RegExp(`^${name}$`, 'i') })
+  const count = await tabs.count()
+  for (let index = 0; index < count; index += 1) {
+    const tab = tabs.nth(index)
+    if (await tab.isVisible().catch(() => false)) return tab
+  }
+  return null
+}
+
+async function overlayTab(page, name) {
+  const tab = page.locator('[data-narrow-overlay-tab]').filter({ hasText: new RegExp(`^${name}$`, 'i') })
+  if ((await tab.count()) === 0) return null
+  if (!(await tab.first().isVisible().catch(() => false))) return null
+  return tab.first()
+}
+
+async function clickTab(page, name) {
+  // Phone: SESSIONS | BOTS live on the overlay strip, which is not role=tab.
+  const overlay = await overlayTab(page, name)
+  if (overlay) {
+    await overlay.click({ timeout: 8_000 })
+    return
+  }
+  const tab = await visibleTab(page, name)
+  if (!tab) throw new Error(`no visible ${name} tab`)
+  await tab.click({ timeout: 8_000 })
+}
+
+async function visibleRole(page, role, name) {
+  const loc = page.getByRole(role, { name })
+  const count = await loc.count()
+  for (let index = 0; index < count; index += 1) {
+    const item = loc.nth(index)
+    if (await item.isVisible().catch(() => false)) return item
+  }
+  return null
+}
+
+async function showSidebar(page) {
+  // Already open: the phone overlay or a docked Bots tab is on screen.
+  // Clicking Show sidebar again toggles the overlay shut.
+  if ((await page.locator('[data-narrow-overlay]').count()) > 0) return
+  if (await visibleTab(page, 'Bots')) return
+  await page.getByRole('button', { name: 'Show sidebar' }).click({ timeout: 8_000 })
+}
+
+/**
+ * Bot Mode, a mock chat turn, and session resume. Runs against the in-process
+ * HTTPS mock (no model key). A real `hermes dashboard` is not started.
+ */
+async function sessionFlow(page, profile, shot) {
+  await showSidebar(page)
+  await clickTab(page, 'Sessions')
+  const sessionRow = page.getByRole('button', { name: /E2E Session/ })
+  const listed = await sessionRow.first().waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false)
+  const sessionButton = listed ? await visibleRole(page, 'button', /E2E Session/) : null
+  check(`${profile.name}: sessions list shows E2E Session`, listed)
+  if (listed) await shot('07-sessions')
+
+  let resumed = false
+  if (listed) {
+    if (!sessionButton) throw new Error('E2E Session row is not visible')
+    await sessionButton.click({ timeout: 8_000 })
+    resumed = await page.getByText('Noted.').waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false)
+  }
+  check(`${profile.name}: resuming the session shows its transcript`, resumed)
+  if (resumed) await shot('08-resume')
+
+  let replied = false
+  if (resumed) {
+    const index = await page.evaluate(() => {
+      const nodes = [...document.querySelectorAll('[contenteditable="true"]')]
+      let best = -1
+      let bestBottom = -1
+      nodes.forEach((el, i) => {
+        const box = el.getBoundingClientRect()
+        if (box.width * box.height <= 4) return
+        if (box.bottom >= bestBottom) {
+          bestBottom = box.bottom
+          best = i
+        }
+      })
+      return best
+    })
+    if (index >= 0) {
+      const composer = page.locator('[contenteditable="true"]').nth(index)
+      const prompt = `ping ${profile.name}`
+      await composer.click({ timeout: 5_000 })
+      await composer.pressSequentially(prompt)
+      await composer.press('Enter')
+      replied = await page.getByText(`mock-model-reply ${prompt}`, { exact: true }).waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false)
+    }
+  }
+  check(`${profile.name}: mock chat round-trip shows the mock reply`, replied)
+  if (replied) await shot('09-roundtrip')
+}
+
+async function botsFlow(page, profile, shot) {
+  await showSidebar(page)
+  await clickTab(page, 'Bots')
+  const researcher = page.getByText(/^researcher$/i)
+  const roster = await researcher.first().waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false)
+  check(`${profile.name}: Bots roster lists Researcher`, roster)
+  if (roster) await shot('04-bots')
+
+  let botChat = false
+  if (roster) {
+    const row = await visibleRole(page, 'button', /researcher/i)
+    if (!row) throw new Error('researcher row is not visible')
+    await row.click()
+    botChat = await page.getByText('Bot Chat ready').waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false)
+  }
+  check(`${profile.name}: Bot Chat opens the canonical transcript`, botChat)
+  if (botChat) await shot('05-bot-chat')
+
+  // Back to the roster for New Bot. A phone hides the pane after navigation.
+  let add = await visibleRole(page, 'button', 'New bot or group chat')
+  if (!add) {
+    await showSidebar(page)
+    await clickTab(page, 'Bots')
+    add = await visibleRole(page, 'button', 'New bot or group chat')
+  }
+  const addVisible = Boolean(add)
+  let created = false
+  if (addVisible) {
+    const opened = await add.click({ timeout: 8_000 }).then(() => true).catch(() => false)
+    const item = page.getByRole('menuitem', { name: 'New bot' })
+    const itemVisible = opened && await item.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false)
+    if (itemVisible) {
+      await item.click()
+      const nameField = page.getByPlaceholder('inbox-triage')
+      const fieldVisible = await nameField.waitFor({ state: 'visible', timeout: 8_000 }).then(() => true).catch(() => false)
+      if (!fieldVisible) {
+        const bits = await page.locator('[role="dialog"], [role="menu"], [role="menuitem"]').allInnerTexts().catch(() => [])
+        console.log(`    ! ${profile.name}: New Bot dialog did not open — ${bits.join(' | ').slice(0, 300)}`)
+      } else {
+        const botName = `bot${profile.width}`
+        await nameField.fill(botName)
+        await shot('06-new-bot')
+        const create = page.getByRole('button', { name: 'Create Bot' })
+        const enabled = await create.isEnabled().catch(() => false)
+        if (enabled) {
+          await create.click()
+          created = await page.getByText(botName, { exact: false }).first().waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false)
+          if (created) await shot('06-new-bot')
+        } else {
+          console.log(`    ! ${profile.name}: Create Bot stayed disabled for ${botName}`)
+        }
+      }
+    }
+  }
+  check(`${profile.name}: New Bot creates a profile`, created, addVisible ? '' : 'New Bot control not visible')
+  await page.keyboard.press('Escape').catch(() => {})
+}
+
+async function releaseFlows(page, profile) {
+  const shot = (name) => page.screenshot({ path: path.join(shotDir, `${profile.name}-${name}.png`) })
+  // Resume before Bot Mode. Opening a bot re-homes the sidebar onto that
+  // profile, and the default-profile row ("E2E Session") leaves the list.
+  // Every viewport runs both. On a phone the sidebar closes when the session
+  // opens; Show sidebar brings it back.
+  await sessionFlow(page, profile, shot)
+  await botsFlow(page, profile, shot)
 }
 
 /** Two clients at once (the base for the later sync/read-state scenarios). */
