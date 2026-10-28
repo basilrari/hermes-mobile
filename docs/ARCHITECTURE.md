@@ -99,7 +99,7 @@ Eng B upstream PR merges.
 
 | Pin | SHA | Verified |
 |---|---|---|
-| Renderer + shared | `450ad5055e` (`NousResearch/hermes-agent` main, 2026-10-15) | `apps/desktop/src` and `apps/shared/**` byte-identical to upstream at that SHA; the five upstream-only directories (`docs/`, `e2e/`, `packaging/`, `pr-assets/`, `preview-demo.html`) are intentionally not vendored. The previous pin `7bda2a33` is an ancestor of it with **zero** `apps/desktop` commits between, so no resync was needed. |
+| Renderer + shared | `bf0203a7` (`NousResearch/hermes-agent` stable tag `v0.22.5`, tag object `56b6a31f`) | Copied from that tag, not from `main`. `apps/desktop/docs`, `e2e`, `packaging`, `pr-assets`, and `preview-demo.html` are not vendored. Before the copy, `git rev-parse v0.22.5` was `56b6a31fededdf7364e1a0a79548d144e7fd81a3` (type `tag`) and `git rev-parse v0.22.5^{commit}` was `bf0203a794a07aac3ff764972ab9087baa4e4f4e`. |
 
 The `package-lock.json` at the root is **this repo's** workspace lockfile (the root
 `package.json` declares `workspaces`), so it legitimately differs from upstream's; it is
@@ -122,7 +122,7 @@ Every override is registered in `apps/mobile/vite.config.ts` and must have a row
 | Override | Replaces | Why | Removal condition |
 |---|---|---|---|
 | `src/overrides/hermes-bots-relay.ts` (HM-11) | `plugins/hermes-bots/plugin.tsx`'s `./relay` import | The Desktop bot relay publishes each gateway the roster of agents on its **other** connections. Mobile has one connection, so it publishes an **empty** roster and `write_remote_roster` replaces `roster.json` wholesale (upstream #115161) — opening the app could wipe a Desktop's roster. | Upstream stops publishing an empty roster for a sole connection (#115161). |
-| `src/overrides/canonical-group-capabilities.ts` (HM-14) | `plugins/hermes-bots/canonical-group-capabilities` (all importers) | `groupExecutionMode` returns `legacy` for a gateway with no room driver, and `legacy` is the branch that lets the renderer keep rooms **on the device**. Option D requires every room to be a gateway room, so on mobile `legacy` is demoted to `unavailable`. | A stock gateway always reports a canonical driver, or upstream drops the device-local fallback. |
+| `src/overrides/canonical-group-capabilities.ts` (HM-14) | `plugins/hermes-bots/canonical-group-capabilities` (all importers) | `groupExecutionMode` returns `legacy` for a gateway with no room driver, and `legacy` is the branch that lets the renderer keep rooms **on the device**. v0.22.5 also reads that mode from `useGroupCapability`, which calls the upstream function internally, so the override demotes `legacy` on the hook's returned mode as well. Option D requires every room to be a gateway room. | A stock gateway always reports a canonical driver, or upstream drops the device-local fallback. |
 
 ## Device storage (HM-13)
 
@@ -137,8 +137,8 @@ never a value, so no credential can reach the artefact). Reproduce with
 The harness **fails** if a key matches the conversation-state pattern, and
 *reports* any key it cannot classify so that each one gets a row here.
 
-Measured 2026-10-16 (token gateway, four viewports, after login + roster):
-**30 `localStorage` keys, 0 `sessionStorage` keys, 0 IndexedDB databases.**
+Measured 2026-10-28 (mock token gateway, four viewports, after login + roster, before a model turn):
+**34 `localStorage` keys, 0 `sessionStorage` keys, 0 IndexedDB databases.**
 
 | Key pattern | Class | Why it is allowed |
 |---|---|---|
@@ -148,6 +148,8 @@ Measured 2026-10-16 (token gateway, four viewports, after login + roster):
 | `CapacitorStorage.hermes.device.id.v1`, `.device.label.v1` | bridge state | The HM-25 device identity. Not a secret, not a hardware id. |
 | `hermes-boot-background`, `hermes-boot-color-scheme` | UI preference | Chosen before first paint. |
 | `hermes-desktop-active-profile-v1` | UI preference | Last profile shown. |
+| `hermes-desktop-onboarded-v1` | UI preference | Renderer cache that setup already completed (`"1"`). Written once `setup.runtime_check` reports ready. |
+| `hermes.plugin.hermes-bots.bot-meta` | UI preference | Bot title and avatar. Not a transcript. |
 | `hermes.desktop.*` | UI preference / rebuildable cache | Layout tree, pane states, theme, tool view, keybinds, tutorials, `model-pricing.v1` (a cache). Not `inflightTurnJournal` or `composerQueue.v1`. |
 | `hermes.updates.last-passive-check` | UI preference | A timestamp. |
 | `hermes.desktop.preparedSubmissions.spent.*` | rebuildable cache | Send tombstones; appears only after a send. |

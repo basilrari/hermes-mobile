@@ -79,6 +79,9 @@ export function makeStubs() {
 
     // Connection-config UI (desktop Settings → Gateway). Mobile owns its own
     // connect/login screens, so these return inert defaults.
+    // Shape is DesktopConnectionConfig (v0.22.5 added the keychain, cloud and
+    // ssh fields). Mobile never persists a desktop connection.json; these are
+    // the inert defaults the settings screens read.
     getConnectionConfig: async () => ({
       envOverride: false,
       mode: 'remote' as const,
@@ -87,7 +90,16 @@ export function makeStubs() {
       remoteOauthConnected: true,
       remoteTokenPreview: null,
       remoteTokenSet: false,
+      secureTokenStorage: false,
+      remoteTokenPlainText: false,
       remoteUrl: '',
+      cloudOrg: '',
+      sshHost: '',
+      sshUser: '',
+      sshPort: null,
+      sshKeyPath: '',
+      sshRemoteHermesPath: '',
+      sshRemoteProfile: '',
     }),
     saveConnectionConfig: async (p: unknown) => p,
     applyConnectionConfig: async (p: unknown) => p,
@@ -107,9 +119,18 @@ export function makeStubs() {
     }),
     oauthLogoutConnectionConfig: async () => ({ ok: true, connected: false }),
 
+    // No desktop profile preference. `getDefault` returns null so the renderer
+    // does not restore a route this shell never saved. The methods exist
+    // because v0.22.5's profile object requires them; absence is feature-detected
+    // as "older shell", which is also fine, but a present no-op matches the
+    // contract without inventing a saved route.
     profile: {
       get: async () => ({ profile: null }),
-      set: async () => ({ profile: null }),
+      set: async (name: string | null) => ({ profile: name }),
+      getDefault: async () => null,
+      setDefault: async (route: { connectionId: null | string; profile: string }) => route,
+      onDefaultChanged: () => noopUnsub,
+      remember: async (name: string | null) => ({ profile: name }),
     },
 
     requestMicrophoneAccess: async () => true,
@@ -157,7 +178,7 @@ export function makeStubs() {
     onBackendExit: () => noopUnsub,
 
     getVersion: async () => ({
-      appVersion: '0.1.1',
+      appVersion: '0.2.0',
       electronVersion: '',
       nodeVersion: '',
       platform: 'capacitor',
@@ -174,6 +195,8 @@ export function makeStubs() {
 
     uninstall: {
       summary: async () => ({
+        code_removal_allowed: false,
+        native_removal_instructions: null,
         hermes_home: '',
         agent_installed: false,
         gui_installed: false,
@@ -186,9 +209,16 @@ export function makeStubs() {
       run: async () => ({ ok: false, error: 'unsupported-on-mobile' }),
     },
 
-    // ── Members the upstream-main renderer contract requires (added when the
-    // renderer was synced to NousResearch/hermes-agent main for Bot Mode).
-    // All desktop-shell-only; inert on a phone/tablet.
+    // ── Desktop-shell members the v0.22.5 renderer contract names.
+    // Inert on a phone/tablet.
+    //
+    // `connections` (the v2 multi-connection registry) is intentionally absent.
+    // `hasRegistryTopology()` is true as soon as `connections.list` exists, and
+    // session owner resolution then fail-closes unless every row is stamped
+    // with a registry id. Mobile is one remote gateway — the legacy topology
+    // the renderer still takes when the registry bridge is missing
+    // (`refreshConnectionsRegistry` returns null). A stub registry would flip
+    // that and break session resume. Do not add one.
     openSessionInTerminal: async () => unsupportedWindow,
     openWindow: async () => unsupportedWindow,
     openBrowserWindow: async () => unsupportedWindow,

@@ -261,3 +261,14 @@ button.group\/section-label {
   min-height: 24px !important;
   align-items: center !important;
 }
+
+/* v0.22.5 compact session rows: the title button measured 18px and the
+   actions button (size-5, inside [data-row-actions]) measured 20px once a
+   session was actually listed. Same 24px floor as the section rows above. */
+.row-hover button.block {
+  min-height: 24px !important;
+}
+[data-row-actions] button {
+  min-width: 24px !important;
+  min-height: 24px !important;
+}

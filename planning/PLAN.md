@@ -2,8 +2,8 @@
 
 Status: **approved by Basil**. Issues are tracked on GitHub (`basilrari/hermes-mobile`). No due dates: start now, finish as fast as possible.
 Prepared by Hermes Mobile (lead).
-Repos read: `basilrari/hermes-mobile` @ `463330d` (v0.1.1, renderer pinned to upstream `7bda2a33`) and
-`NousResearch/hermes-agent` main @ `acc3cada` (167 commits past `7bda2a33` when read).
+Repos read: `basilrari/hermes-mobile` @ `463330d` (v0.1.1) and
+`NousResearch/hermes-agent` main @ `acc3cada`. The vendored renderer is now stable tag `v0.22.5` (`bf0203a7`).
 
 Related files: [`issues.json`](issues.json) / [`issues.md`](issues.md) (33 issues), [`overview.html`](overview.html) (one-page summary).
 

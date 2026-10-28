@@ -552,7 +552,7 @@ Labels: `track:app`, `type:chore`, `area:renderer`, `priority:P0` · Assignee ro
 **ID:** HM-16 · **Track:** Eng A (app/bridge/Android) · **Milestone:** M1 · Gateway-only client
 
 #### Context
-The renderer is pinned at `7bda2a33`; upstream main is 167+ commits ahead. We need one documented place for mobile-only shims and for carrying Eng B's patches until they merge.
+The renderer is pinned at `bf0203a7` (NousResearch/hermes-agent stable tag v0.22.5). We need one documented place for mobile-only shims and for carrying Eng B's patches until they merge.
 
 #### Tasks
 - [ ] Resync `apps/desktop` + `apps/shared` + lockfile to a chosen SHA; rerun tests, typecheck, harness, APK build.

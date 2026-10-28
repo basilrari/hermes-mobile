@@ -18,15 +18,33 @@
 import {
   groupCreationSource,
   groupExecutionMode as upstreamGroupExecutionMode,
+  groupSeatableProfiles,
+  seatableGroupBots,
+  useGroupCapability as upstreamUseGroupCapability,
 } from '@/plugins/hermes-bots/canonical-group-capabilities'
 
 import { roomsOnlyMode } from './rooms-only'
 
 export type { GroupExecutionMode } from './rooms-only'
+export type { GroupCapabilityState } from '@/plugins/hermes-bots/canonical-group-capabilities'
 
-export { groupCreationSource }
+export { groupCreationSource, groupSeatableProfiles, seatableGroupBots }
 
 /** Upstream's decision, with the device-local branch removed on mobile. */
 export function groupExecutionMode(value: unknown): ReturnType<typeof upstreamGroupExecutionMode> {
   return roomsOnlyMode(upstreamGroupExecutionMode(value))
+}
+
+/**
+ * v0.22.5 reads the mode from this hook, which calls the upstream function
+ * internally. Wrap the published mode the same way. `seatableGroupBots` treats
+ * `legacy` as "every bot"; demoting it here keeps that branch off the device.
+ */
+export function useGroupCapability(active: boolean): ReturnType<typeof upstreamUseGroupCapability> {
+  const state = upstreamUseGroupCapability(active)
+  const mode = state.mode === 'legacy' ? 'unavailable' : state.mode
+  const capability =
+    state.capability?.mode === 'legacy' ? { ...state.capability, mode: 'unavailable' as const } : state.capability
+  if (mode === state.mode && capability === state.capability) return state
+  return { ...state, mode, capability }
 }

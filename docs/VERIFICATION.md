@@ -1,21 +1,23 @@
 # Verification status
 
-Two records: what v0.1.1 proved, and what Option D has proved since. Every line
-below is a command that was run, not an expectation.
+Two records: what v0.1.1 proved, and what this tree proved on 2026-10-28.
+Every line below is a command that was run, not an expectation.
 
-## Option D (current)
+## v0.2.0-debug (this tree)
 
-Branch `main`, renderer pinned to `NousResearch/hermes-agent` `450ad5055e`
-(see `docs/ARCHITECTURE.md` → Renderer sync).
+Renderer pin: NousResearch/hermes-agent stable tag `v0.22.5`
+(tag object `56b6a31fededdf7364e1a0a79548d144e7fd81a3`, commit
+`bf0203a794a07aac3ff764972ab9087baa4e4f4e`). Not upstream `main`.
+See `docs/ARCHITECTURE.md` → Renderer sync.
 
 ### Automated, on the box
 
 | Check | Command | Result |
 |---|---|---|
-| Bridge unit tests | `cd apps/mobile && npm test` | **109 passed** (9 files) |
-| Types | `cd apps/mobile && npm run typecheck` | 0 errors |
-| End-to-end harness | `npm run e2e` | **59 checks** at 412×915, 915×412, 800×1280, 1280×800 |
-| Gateway doctor | `cd scripts/gateway-doctor && python3 -m unittest test_doctor.py` | 31 tests |
+| Bridge unit tests | `cd apps/mobile && npm test` | **193 passed** (20 files), then `scripts/check-legacy-app-id.mjs` exit 0 (the one README reinstall line) |
+| Types | `cd apps/mobile && npm run typecheck` | exit 0, no tsc output |
+| End-to-end harness | `npm run e2e:only` against the in-process HTTPS mock | **79/79 checks** at 412×915, 915×412, 800×1280, 1280×800 |
+| Gateway doctor | `cd scripts/gateway-doctor && python3 -m unittest test_doctor.py -v` | **31 tests**, OK |
 | Secret scan | `gitleaks detect --source . --config .gitleaks.toml` | no leaks (full history) |
 | Carried patches | `node scripts/apply-upstream-patches.mjs --check` then `node scripts/apply-upstream-patches.mjs --self-test` | no carried patches (nothing to do); self-test: PASS |
 | Android debug APK | `npm run apk:debug` | builds (see the gap below) |
@@ -63,8 +65,9 @@ applied)` / `e2e layout pass (4 viewports)` as reported checks.
 
 ### What changed
 
-- `apps/desktop` + `apps/shared` synced to NousResearch/hermes-agent main `7bda2a33` (the PR #49834
+- `apps/desktop` + `apps/shared` synced to the then-current hermes-agent pin (the PR #49834
   snapshot predated Bot Mode: no `src/plugins/hermes-bots`, no plugin SDK/contrib loader).
+  The current pin is tag `v0.22.5` commit `bf0203a7`.
 - Root `package-lock.json` is upstream's, so transitive deps match (a drifted `@assistant-ui/tap`
   0.9.23 caused a "Maximum update depth exceeded" render loop).
 - Mobile Vite build mirrors upstream's: React Compiler pass, `@hermes/plugin-sdk` and

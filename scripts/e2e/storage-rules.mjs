@@ -45,6 +45,8 @@ export const KNOWN_STORAGE = [
   },
   { match: /^hermes-boot-/, kind: 'ui pref', note: 'boot theme/background' },
   { match: /^hermes-desktop-active-profile-v1$/, kind: 'ui pref', note: 'last active profile' },
+  { match: /^hermes-desktop-onboarded-v1$/, kind: 'ui pref', note: 'renderer cache that setup already completed' },
+  { match: /^hermes\.plugin\.hermes-bots\.bot-meta(-v2)?$/, kind: 'ui pref', note: 'bot title and avatar, not a transcript' },
   {
     match: /^hermes\.desktop\.inflightTurnJournal\.v(1$|2:)/,
     kind: 'conversation state',
