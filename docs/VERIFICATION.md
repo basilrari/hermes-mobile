@@ -16,7 +16,7 @@ See `docs/ARCHITECTURE.md` → Renderer sync.
 |---|---|---|
 | Bridge unit tests | `cd apps/mobile && npm test` | **193 passed** (20 files), then `scripts/check-legacy-app-id.mjs` exit 0 (the one README reinstall line) |
 | Types | `cd apps/mobile && npm run typecheck` | exit 0, no tsc output |
-| End-to-end harness | `npm run e2e:only` against the in-process HTTPS mock | **79/79 checks** at 412×915, 915×412, 800×1280, 1280×800 |
+| End-to-end harness | `npm run e2e:only` against the in-process HTTPS mock, three times back to back | **83/83**, then **81/83**, then **81/83**. Both misses were phone portrait's mock reply and Bot Chat (workspace render loop). The other three viewports passed every check in all three runs. |
 | Gateway doctor | `cd scripts/gateway-doctor && python3 -m unittest test_doctor.py -v` | **31 tests**, OK |
 | Secret scan | `gitleaks detect --source . --config .gitleaks.toml` | no leaks (full history) |
 | Carried patches | `node scripts/apply-upstream-patches.mjs --check` then `node scripts/apply-upstream-patches.mjs --self-test` | no carried patches (nothing to do); self-test: PASS |

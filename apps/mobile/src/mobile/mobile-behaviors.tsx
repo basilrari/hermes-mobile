@@ -83,7 +83,10 @@ export function MobileBehaviors() {
       if (
         anyDrawerOpen() &&
         !target?.closest('[data-narrow-overlay]') &&
-        !target?.closest('[data-titlebar-cluster]')
+        !target?.closest('[data-titlebar-cluster]') &&
+        // Radix menus and dialogs portal to <body>, outside the overlay.
+        // Treating them as an outside tap swallows the click (New Bot).
+        !target?.closest('[role="menu"], [role="menuitem"], [role="dialog"], [data-radix-popper-content-wrapper]')
       ) {
         e.stopPropagation()
         closeOpenDrawer()

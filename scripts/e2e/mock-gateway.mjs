@@ -158,10 +158,11 @@ export function defaultHandlers(world = createWorld()) {
       operation: params?.operation,
     }),
     'prompt.submit': (params) => {
-      world.lastSubmit = params ?? {}
-      const session = world.sessions[params?.session_id]
       const text = typeof params?.text === 'string' ? params.text : ''
-      if (session && text) session.messages.push({ role: 'user', content: text }, { role: 'assistant', content: MOCK_REPLY })
+      const reply = text ? `mock-model-reply ${text}` : MOCK_REPLY
+      world.lastSubmit = { ...(params ?? {}), reply }
+      const session = world.sessions[params?.session_id]
+      if (session && text) session.messages.push({ role: 'user', content: text }, { role: 'assistant', content: reply })
       return {
         admission_id: 'mock-admission',
         ref: { session_id: params?.session_id },
@@ -196,7 +197,10 @@ export function defaultHandlers(world = createWorld()) {
       room_link: null,
       max_log_limit: 500,
     }),
-    'groups.list': () => ({ rooms: [] }),
+    // next_offset must be null. A missing cursor is not "the last page":
+    // discoverCanonicalGroups throws "Invalid canonical group pagination cursor"
+    // and the Bots pane shows that error instead of opening Bot Chat.
+    'groups.list': () => ({ rooms: [], next_offset: null }),
     // First-run onboarding is the backend's call (`onboarding.state` → {run,
     // eligible}); with neither, the renderer boots straight into the shell
     // instead of covering it with the setup flow.
@@ -300,6 +304,13 @@ export async function startMockGateway({ token = 'e2e-token', logPath = null } =
       if (!frame || typeof frame.method !== 'string') return
       log(`RPC ${frame.method}`)
       if (frame.id === undefined) return
+      // The renderer treats a successful empty object as a broken control
+      // snapshot and covers the composer with an error banner. This mock has
+      // no session-control API; say so.
+      if (frame.method === 'session.control.read' || frame.method === 'session.control.action') {
+        socket.send(JSON.stringify({ jsonrpc: '2.0', id: frame.id, error: { code: -32601, message: 'Method not found' } }))
+        return
+      }
       const handler = handlers.get(frame.method)
       let result = {}
       try {
@@ -311,11 +322,12 @@ export async function startMockGateway({ token = 'e2e-token', logPath = null } =
       socket.send(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result }))
       if (frame.method === 'prompt.submit' && world.lastSubmit?.session_id) {
         const sessionId = world.lastSubmit.session_id
+        const reply = world.lastSubmit.reply
         world.lastSubmit = null
         for (const params of [
           { type: 'message.start', session_id: sessionId },
-          { type: 'message.delta', session_id: sessionId, payload: { text: MOCK_REPLY } },
-          { type: 'message.complete', session_id: sessionId, payload: { text: MOCK_REPLY } },
+          { type: 'message.delta', session_id: sessionId, payload: { text: reply } },
+          { type: 'message.complete', session_id: sessionId, payload: { text: reply } },
           { type: 'session.info', session_id: sessionId, payload: { running: false, revision: 2, execution_generation: 2 } },
         ]) {
           socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'event', params }))

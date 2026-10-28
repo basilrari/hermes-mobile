@@ -49,9 +49,15 @@ body {
   overflow: hidden;
 }
 
-#root > * {
+#root > *:not([data-hermes-trace]) {
   height: 100% !important;
   max-height: 100%;
+}
+/* The trace chip is a sibling of the shell. The rule above would stretch it
+   into a full-height bar and cover the composer and the sidebar toggle. */
+#root > [data-hermes-trace] {
+  height: auto !important;
+  max-height: none;
 }
 
 /*

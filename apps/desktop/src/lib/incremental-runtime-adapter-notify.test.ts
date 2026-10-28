@@ -167,4 +167,21 @@ describe('IncrementalExternalStoreThreadRuntimeCore adapter swap notifications',
 
     expect(depth).toBe(0)
   })
+
+  it('does NOT notify when a new repository object holds the same ThreadMessage identities', () => {
+    const messages = [message('a', 'one'), message('b', 'two')]
+    const core = new IncrementalExternalStoreRuntimeCore(adapterWith(repositoryOf(messages)))
+    const thread = core.threads.getMainThreadRuntimeCore()
+
+    let notifications = 0
+    thread.subscribe(() => {
+      notifications += 1
+    })
+
+    for (let render = 0; render < 5; render += 1) {
+      core.setAdapter(adapterWith(repositoryOf(messages)))
+    }
+
+    expect(notifications).toBe(0)
+  })
 })

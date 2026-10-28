@@ -234,7 +234,26 @@ class IncrementalExternalStoreThreadRuntimeCore extends ExternalStoreThreadRunti
     }
 
     this.repository.resetHead(self._assistantOptimisticId ?? messages.at(-1)?.id ?? null)
-    self._messages = this.repository.getMessages()
+    const nextMessages = this.repository.getMessages()
+    const previous = self._messages
+    // getMessages() allocates a new array even when every ThreadMessage is the
+    // one already published. Publishing it makes the thread state's `messages`
+    // field fail shallow equality, and assistant-ui then force-updates until
+    // "getSnapshot should be cached" takes down the workspace pane.
+    const sameMessages =
+      !!previous &&
+      previous.length === nextMessages.length &&
+      previous.every((message, index) => message === nextMessages[index])
+
+    if (sameMessages) {
+      if (changed || (oldStore?.isRunning ?? false) !== (store.isRunning ?? false)) {
+        self._notifySubscribers()
+      }
+
+      return
+    }
+
+    self._messages = nextMessages
     self._notifySubscribers()
   }
 }

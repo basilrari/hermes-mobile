@@ -513,11 +513,34 @@ const AssistantPreviewEmbeds: FC = () => {
  * stack a wall of stale cards down the transcript. Sending the next message
  * retires it — the working tree it describes is already history by then.
  */
+const SETTLED_PARTS = new Map<string, readonly { type: string }[]>()
+
 const SettledChangedFiles: FC = () => {
   const settledParts = useAuiState(s => {
     const isLastMessage = s.thread.messages[s.thread.messages.length - 1]?.id === s.message.id
 
-    return s.message.status?.type === 'running' || !isLastMessage ? EMPTY_PARTS : s.message.parts
+    if (s.message.status?.type === 'running' || !isLastMessage) {
+      return EMPTY_PARTS
+    }
+
+    // `parts` is a fresh array on some runtime reads. Returning it directly
+    // makes useAuiState force-update until the workspace error boundary
+    // replaces the transcript (phone portrait, after a reply lands).
+    const parts = s.message.parts
+    const key = `${s.message.id}:${parts.map(part => `${part.type}:${'text' in part ? part.text : ''}`).join('\n')}`
+    const cached = SETTLED_PARTS.get(key)
+
+    if (cached) {
+      return cached
+    }
+
+    if (SETTLED_PARTS.size > 200) {
+      SETTLED_PARTS.clear()
+    }
+
+    SETTLED_PARTS.set(key, parts)
+
+    return parts
   })
 
   return <ChangedFilesCard parts={settledParts} />

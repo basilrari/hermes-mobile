@@ -116,7 +116,7 @@ cd android && ./gradlew assembleDebug
 # → apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The root script `npm run apk:debug` runs the same three steps. The current version is `versionName "0.2.0"`, `versionCode 3`. Package `io.github.basilrari.hermesmobile`. A debug APK built on 2026-10-28 had SHA-256 `5d7ceea4bd3127d88da1af6a1abae5515190466dde56949701a9c3d1546bf809`. No GitHub release or tag was created for it.
+The root script `npm run apk:debug` runs the same three steps. The current version is `versionName "0.2.0"`, `versionCode 3`. Package `io.github.basilrari.hermesmobile`. A debug APK built on 2026-10-28 had SHA-256 `0b1d118b55b5f83c18df7811ae967d55e52b655e54e4e5fcbc4291630085b8ee`. No GitHub release or tag was created for it.
 
 ### Headless verification
 
@@ -136,14 +136,9 @@ touch floor; the RPC trace is live and shows **zero `bot_relay.*`**;
 stays empty; `deviceIdentity()` returns a v4 uuid and a non-empty label; and
 **no conversation state is in `localStorage`, `sessionStorage`, or an IndexedDB
 database name**. Plus a two-client pass and an id-across-a-relaunch pass.
-On 2026-10-28 `npm run e2e:only` printed **79/79**. The extra checks, on the
-three docked viewports (915×412, 800×1280, 1280×800), are the sessions list,
-resume, a mock chat round-trip, the Bots roster (`researcher`), Bot Chat, and
-New Bot. Portrait (412×915) asserts the sessions list and resume; its mock
-send did not show a reply (the debug-trace chip covers the composer control),
-and Bot Mode is not re-opened there because the sidebar closes and that same
-chip covers the toggle. The mock is the gateway. A local `hermes dashboard`
-from the tag was not started.
+On 2026-10-28 the harness asserts the same set on every viewport, including phone portrait: sessions list, resume, a mock chat round-trip, the Bots roster, Bot Chat, and New Bot. Three back-to-back `npm run e2e:only` runs printed **83/83**, then **81/83**, then **81/83**. Both failures were phone portrait's mock reply and Bot Chat. The debug-trace chip no longer covers the sidebar toggle (it sits under the titlebar, at least 24px). The remaining miss is the workspace pane's error boundary: after a reply it can replace the chat with "Maximum update depth exceeded. The result of getSnapshot should be cached to avoid an infinite loop." That was root-caused (assistant-ui's `useSyncExternalStore` sees a fresh snapshot) and reduced with stable message and parts identities; it still happens on some portrait runs. It was not papered over with a retry.
+
+A local `hermes dashboard` from tag `v0.22.5` commit `bf0203a7` was installed with `uv` (Python 3.14, editable `.[web]`) and started as `hermes serve` on `127.0.0.1:9119` with a fresh `HERMES_HOME` and no model key. The process has no TLS flag, so a local HTTPS reverse proxy with a self-signed localhost cert sat in front of it. Login reached the shell (`backend v0.22.5`). The Bots roster showed the default Hermes profile. The sessions list was empty, then showed the session created by a chat turn. That turn, with no model configured, showed "Hermes couldn't finish the reply" and the no-provider message. The same workspace render loop then replaced the pane. No `*.ts.net` host was contacted.
 
 It cannot prove device, cookie or room behaviour (a browser uses `fetch`, not
 CapacitorHttp, and cannot read `Set-Cookie`; no hosted room is opened anywhere).
@@ -204,7 +199,7 @@ Gate G0 was passed at #35, so M2 contract-dependent work (#19, #21, #22, #25) ma
 
 - **#18 patched hermes-agent branch:** still not started. No HM-18 branch in this repo and no `basilrari` hermes-agent fork on GitHub. Start fresh. It blocks #19 and the rest of the M2 critical path, and it must be *deployed* on pavillion-claw, which is Basil's machine (rule 2). `docs/GATEWAY_SETUP.md` ends with a `TODO(HM-18)` placeholder for its runbook.
 - **Basil's M0 tablet checklist:** not run. Nothing in this repo can run it: it needs the tablet and the gateway password. Covers the renamed APK install, HTTPS login against `https://pavillion-claw.tailfc1337.ts.net`, the WSS and ws-ticket flow, a real model reply, and a doctor report from pavillion-claw (the #8 acceptance line).
-- **Publishing the debug APK:** not done. `npm run apk:debug` on 2026-10-28 produced `app-debug.apk` (`versionName` 0.2.0, `versionCode` 3, package `io.github.basilrari.hermesmobile`, SHA-256 `5d7ceea4bd3127d88da1af6a1abae5515190466dde56949701a9c3d1546bf809`). No GitHub release and no tag were created. The already-published releases (`v0.1.0-debug`, `v0.1.1-debug`) still carry the old app ID and the cleartext build until someone publishes a new one.
+- **Publishing the debug APK:** not done. `npm run apk:debug` on 2026-10-28 produced `app-debug.apk` (`versionName` 0.2.0, `versionCode` 3, package `io.github.basilrari.hermesmobile`, SHA-256 `0b1d118b55b5f83c18df7811ae967d55e52b655e54e4e5fcbc4291630085b8ee`). No GitHub release and no tag were created. The already-published releases (`v0.1.0-debug`, `v0.1.1-debug`) still carry the old app ID and the cleartext build until someone publishes a new one.
 - **Upstream PRs (#19–#24, #33):** untouched. Gate G3 needs Basil's approval of each title and body before one opens, and they need a patched branch on his machine to test against.
 
 ### Issues
